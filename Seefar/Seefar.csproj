@@ -55,10 +55,10 @@
   </Content>
 </ItemGroup>
 
-<ItemGroup>
+    <!--<ItemGroup>
   <Content Include="modicon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
   </Content>
-</ItemGroup>
+</ItemGroup>-->
 
 </Project>

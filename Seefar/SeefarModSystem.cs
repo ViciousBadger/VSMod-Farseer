@@ -8,6 +8,9 @@ namespace Seefar;
 public class SeefarModSystem : ModSystem
 {
 
+    TestRenderer renderer;
+    ICoreClientAPI clientApi;
+
     // Called on server and client
     // Useful for registering block/entity classes on both sides
     public override void Start(ICoreAPI api)
@@ -22,7 +25,17 @@ public class SeefarModSystem : ModSystem
 
     public override void StartClientSide(ICoreClientAPI api)
     {
-        Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("seefar:hello"));
+        this.renderer = new TestRenderer(api);
+        this.clientApi = api;
+        api.Event.RegisterRenderer(this.renderer, EnumRenderStage.Opaque);
+    }
+
+    public override void Dispose()
+    {
+        if (this.renderer != null && this.clientApi != null)
+        {
+            this.clientApi.Event.UnregisterRenderer(this.renderer, EnumRenderStage.Opaque);
+        }
     }
 
 }
