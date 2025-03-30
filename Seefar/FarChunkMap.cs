@@ -10,13 +10,26 @@ public class FarChunkMap
 
     private Dictionary<Vec2i, FarChunk> loadedChunks = new Dictionary<Vec2i, FarChunk>();
 
+    public Dictionary<Vec2i, FarChunk> LoadedChunks => loadedChunks;
+
     public event Action<Vec2i, FarChunk> NewChunkLoaded;
 
     public FarChunkMap()
     {
     }
 
-    public void Load(Vec2i coord, IWorldChunk chunk)
+    public void LoadFromMessage(FarChunkMessage msg)
+    {
+        Vec2i coord = new Vec2i(msg.ChunkPosX, msg.ChunkPosZ);
+        if (loadedChunks.ContainsKey(coord)) return;
+
+        var farchunk = new FarChunk(msg.Heightmap);
+        loadedChunks.Add(coord, farchunk);
+
+        NewChunkLoaded?.Invoke(coord, farchunk);
+    }
+
+    public void LoadFromWorld(Vec2i coord, IWorldChunk chunk)
     {
         if (loadedChunks.ContainsKey(coord)) return;
 
@@ -31,6 +44,6 @@ public class FarChunkMap
 
         NewChunkLoaded?.Invoke(coord, farchunk);
 
-        SeefarModSystem.Logger.Notification("[{0}]", string.Join(", ", heightmap));
+        // SeefarModSystem.Logger.Notification("[{0}]", string.Join(", ", heightmap));
     }
 }

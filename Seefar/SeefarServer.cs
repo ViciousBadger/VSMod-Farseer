@@ -41,7 +41,7 @@ public class SeefarServer : IDisposable
             Vec2i coord = chunkCoord.Copy();
             coord.X += i;
 
-            this.map.Load(coord, chunk);
+            this.map.LoadFromWorld(coord, chunk);
         }
         // modSystem.Mod.Logger.Notification("Chunk col loaded, coord " + chunkCoord + ", chunk count " + chunks.Length);
     }

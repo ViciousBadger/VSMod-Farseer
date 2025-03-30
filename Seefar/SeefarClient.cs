@@ -10,7 +10,7 @@ public class SeefarClient : IDisposable
     ModSystem modSystem;
     ICoreClientAPI api;
 
-    TestRenderer renderer;
+    FarChunkRenderer renderer;
 
     FarChunkMap map;
 
@@ -18,8 +18,9 @@ public class SeefarClient : IDisposable
     {
         this.modSystem = mod;
         this.api = api;
+        this.map = new FarChunkMap();
+        this.renderer = new FarChunkRenderer(api, map);
 
-        this.renderer = new TestRenderer(api);
         api.Event.RegisterRenderer(this.renderer, EnumRenderStage.Opaque);
 
         //api.Event.MapRegionLoaded
@@ -29,7 +30,8 @@ public class SeefarClient : IDisposable
 
     void OnRecieveFarChunkMessage(FarChunkMessage msg)
     {
-        api.Logger.Notification("recieved:" + msg.Heightmap);
+        // api.Logger.Notification("recieved:" + msg.Heightmap);
+        map.LoadFromMessage(msg);
     }
 
     public void Dispose()
