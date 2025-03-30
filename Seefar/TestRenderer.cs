@@ -5,7 +5,6 @@ using Vintagestory.API.Util;
 
 namespace Seefar;
 
-
 public class TestRenderer : IRenderer
 {
     private ICoreClientAPI api;
@@ -23,13 +22,11 @@ public class TestRenderer : IRenderer
 
         var mesh = CubeMeshUtil.GetCubeOnlyScaleXyz(32f, 32f, new Vec3f());
         mesh.Rgba = new byte[6 * 4 * 4].Fill((byte)255);
-        CubeMeshUtil.SetXyzFacesAndPacketNormals(mesh);
+        //CubeMeshUtil.SetXyzFacesAndPacketNormals(mesh);
 
         this.meshRef = this.api.Render.UploadMesh(mesh);
         // byte[] rgba = CubeMeshUtil.GetShadedCubeRGBA(ColorUtil.WhiteArgb, CubeMeshUtil.DefaultBlockSideShadings, false);
         // mesh.SetRgba(rgba);
-
-
     }
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)

@@ -2,40 +2,44 @@
 using Vintagestory.API.Server;
 using Vintagestory.API.Config;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
+using System;
 
 namespace Seefar;
 
 public class SeefarModSystem : ModSystem
 {
+    SeefarServer server;
+    SeefarClient client;
 
-    TestRenderer renderer;
-    ICoreClientAPI clientApi;
+    public static ILogger Logger;
 
     // Called on server and client
     // Useful for registering block/entity classes on both sides
     public override void Start(ICoreAPI api)
     {
         Mod.Logger.Notification("Hello from template mod: " + api.Side);
+
+        api.Network.RegisterChannel("seefar").RegisterMessageType<FarChunkMessage>();
     }
 
     public override void StartServerSide(ICoreServerAPI api)
     {
-        Mod.Logger.Notification("Hello from template mod server side: " + Lang.Get("seefar:hello"));
+        Logger = Mod.Logger;
+        this.server = new SeefarServer(this, api);
     }
+
 
     public override void StartClientSide(ICoreClientAPI api)
     {
-        this.renderer = new TestRenderer(api);
-        this.clientApi = api;
-        api.Event.RegisterRenderer(this.renderer, EnumRenderStage.Opaque);
+        Logger = Mod.Logger;
+        this.client = new SeefarClient(this, api);
     }
 
     public override void Dispose()
     {
-        if (this.renderer != null && this.clientApi != null)
-        {
-            this.clientApi.Event.UnregisterRenderer(this.renderer, EnumRenderStage.Opaque);
-        }
+        server?.Dispose();
+        client?.Dispose();
     }
 
 }
