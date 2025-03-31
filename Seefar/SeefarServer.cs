@@ -7,47 +7,39 @@ using System;
 public class SeefarServer : IDisposable
 {
     ModSystem modSystem;
-    ICoreServerAPI api;
+    ICoreServerAPI sapi;
 
     FarChunkMap map;
 
-    public SeefarServer(ModSystem mod, ICoreServerAPI api)
+    public SeefarServer(ModSystem mod, ICoreServerAPI sapi)
     {
         this.modSystem = mod;
-        this.api = api;
+        this.sapi = sapi;
 
         this.map = new FarChunkMap();
 
-        api.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
+        sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
         //
-        var channel = api.Network.GetChannel("seefar");
+        var channel = sapi.Network.GetChannel("seefar");
 
         map.NewChunkLoaded += (coord, chunk) =>
         {
-            api.Logger.Notification("sending chunk at:" + coord);
             channel.BroadcastPacket(new FarChunkMessage { ChunkPosX = coord.X, ChunkPosZ = coord.Y, Heightmap = chunk.Heightmap });
         };
     }
 
     private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
     {
-        for (int i = 0; i < chunks.Length; i++)
-        {
-            int centerX = 16;
-            int centerZ = 16;
-            int centerIdx = centerZ * 32 + centerX;
-
-            IWorldChunk chunk = chunks[i];
-            Vec2i coord = chunkCoord.Copy();
-            coord.X += i;
-
-            this.map.LoadFromWorld(coord, chunk);
-        }
-        // modSystem.Mod.Logger.Notification("Chunk col loaded, coord " + chunkCoord + ", chunk count " + chunks.Length);
+        // sapi.Logger.Notification("chunks length " + chunks.Length);
+        this.map.LoadFromWorld(chunkCoord, chunks[0]);
+        // for (int i = 0; i < chunks.Length; i++)
+        // {
+        //     this.map.LoadFromWorld(new Vec2i(chunkCoord.X, chunkCoord.Y + i), chunks[i]);
+        // }
     }
 
     public void Dispose()
     {
-        api.Event.ChunkColumnLoaded -= OnChunkColumnLoaded;
+        sapi.Event.ChunkColumnLoaded -= OnChunkColumnLoaded;
     }
 }

@@ -21,8 +21,6 @@ public class SeefarClient : IDisposable
         this.map = new FarChunkMap();
         this.renderer = new FarChunkRenderer(api, map);
 
-        api.Event.RegisterRenderer(this.renderer, EnumRenderStage.Opaque);
-
         //api.Event.MapRegionLoaded
         var channel = api.Network.GetChannel("seefar");
         channel.SetMessageHandler<FarChunkMessage>(OnRecieveFarChunkMessage);
@@ -36,9 +34,9 @@ public class SeefarClient : IDisposable
 
     public void Dispose()
     {
-        if (this.renderer != null && this.api != null)
+        if (this.renderer != null)
         {
-            this.api.Event.UnregisterRenderer(this.renderer, EnumRenderStage.Opaque);
+            this.renderer.Dispose();
         }
     }
 }
