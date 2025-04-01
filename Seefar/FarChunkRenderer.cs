@@ -1,3 +1,4 @@
+using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
@@ -13,7 +14,7 @@ public class FarChunkRenderer : IRenderer
     private ICoreClientAPI capi;
     private FarChunkMap map;
 
-    private Matrixf mvMat = new Matrixf();
+    private Matrixf modelMat = new Matrixf();
 
     private IShaderProgram prog;
 
@@ -67,7 +68,7 @@ public class FarChunkRenderer : IRenderer
                 32.0f, 0.0f, 32.0f
         });
         mesh.SetVerticesCount(4);
-        mesh.SetIndices(new int[] { 0, 1, 2, 2, 1, 3 });
+        mesh.SetIndices(new int[] { 0, 2, 1, 2, 3, 1 });
         mesh.SetIndicesCount(6);
 
         InitCustomDataBuffers(mesh);
@@ -117,16 +118,25 @@ public class FarChunkRenderer : IRenderer
         var rapi = capi.Render;
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
 
-        //rapi.GlToggleBlend(true);
-
         prog.Use();
 
-        mvMat.Set(capi.Render.CameraMatrixOriginf).Translate(-camPos.X, -camPos.Y, -camPos.Z);
-        prog.UniformMatrix("modelViewMatrix", mvMat.Values);
+        modelMat.Identity().Translate(-camPos.X, -camPos.Y, -camPos.Z);
+        prog.UniformMatrix("modelMatrix", modelMat.Values);
+        prog.UniformMatrix("viewMatrix", rapi.CameraMatrixOriginf);
         prog.UniformMatrix("projectionMatrix", rapi.CurrentProjectionMatrix);
 
-        prog.Uniform("color", rapi.AmbientColor);
-        prog.Uniform("viewDistance", capi.World.Player.WorldData.DesiredViewDistance);
+        // From sky.png
+        var horizonColorDay = new Vec4f(0.525f, 0.620f, 0.776f, 1.0f);
+        var horizonColorNight = new Vec4f(0.114f, 0.149f, 0.255f, 1.0f);
+
+        prog.Uniform("horizonColorDay", horizonColorDay);
+        prog.Uniform("horizonColorNight", horizonColorNight);
+        prog.Uniform("fogColor", capi.Ambient.BlendedFogColor);
+
+        prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength * 0.95f));
+        prog.Uniform("viewDistance", (float)capi.World.Player.WorldData.DesiredViewDistance);
+
+        rapi.GlToggleBlend(true, EnumBlendMode.Standard);
 
         rapi.RenderMeshInstanced(meshRef, AmountOfFarChunks);
 
