@@ -11,6 +11,8 @@ public class SeefarServer : IDisposable
 
     FarChunkMap map;
 
+    TerrainDB terrainDB;
+
     public SeefarServer(ModSystem mod, ICoreServerAPI sapi)
     {
         this.modSystem = mod;
