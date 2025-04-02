@@ -29,8 +29,8 @@ public class FarDB : SQLiteDBConnection
         var heightmap = new int[heightmapSize];
         var region = new FarRegionHeightmap
         {
-            Resolution = 16,
-            Heightmap = heightmap
+            GridSize = 16,
+            Points = heightmap
         };
 
         for (int x = 0; x < 16; x++)

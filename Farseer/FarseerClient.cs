@@ -12,7 +12,7 @@ public class FarseerClient : IDisposable
     ModSystem modSystem;
     ICoreClientAPI capi;
 
-    FarChunkRenderer renderer;
+    FarRegionRenderer renderer;
 
     FarChunkMap map;
 
@@ -22,6 +22,7 @@ public class FarseerClient : IDisposable
         this.capi = api;
         this.map = new FarChunkMap();
 
+        this.renderer = new FarRegionRenderer(api);
         // this.renderer = new FarChunkRenderer(api, map);
         // channel.SetMessageHandler<FarChunkMessage>(OnRecieveFarChunkMessage);
 
@@ -33,7 +34,9 @@ public class FarseerClient : IDisposable
 
     private void OnRecieveFarRegionData(FarRegionData data)
     {
-        modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Resolution {3}, Length {4}", data.RegionIndex, data.RegionX, data.RegionZ, data.Heightmap.Resolution, data.Heightmap.Heightmap.Length);
+        modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Size {3}, Resolution {4}, Length {5}", data.RegionIndex, data.RegionX, data.RegionZ, data.RegionSize, data.Heightmap.GridSize, data.Heightmap.Points.Length);
+
+        renderer.BuildRegion(data);
     }
 
     public void Init()
@@ -44,24 +47,6 @@ public class FarseerClient : IDisposable
             DesiredRenderDistance = 8,
         });
     }
-
-    // public void RequestRegionsAroundPlayer()
-    // {
-    //
-    //     int radius = 8;
-    //     var playerPos = capi.World.Player.Entity.Pos;
-    //
-    //     channel.SendPacket(new FarRegionRequest
-    //     {
-    //         PlayerUID = capi.World.Player.PlayerUID,
-    //         RegionIndex = MapRegionIndex2D(0, 0),
-    //     });
-    // }
-
-    // public long MapRegionIndex2D(int regionX, int regionY)
-    // {
-    //     return ((ClientMain)capi.World).WorldMap.MapRegionIndex2D(regionX, regionY);
-    // }
 
     void OnRecieveFarChunkMessage(FarChunkMessage msg)
     {

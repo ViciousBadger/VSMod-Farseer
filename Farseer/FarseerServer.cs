@@ -79,6 +79,7 @@ public class FarseerServer : IDisposable
                     RegionIndex = thisRegionIdx,
                     RegionX = thisRegionX,
                     RegionZ = thisRegionZ,
+                    RegionSize = sapi.WorldManager.RegionSize,
                     Heightmap = regionHeightmap,
                 };
 

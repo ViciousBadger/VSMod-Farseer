@@ -38,6 +38,8 @@ public class FarRegionData
     [ProtoMember(3)]
     public int RegionZ;
     [ProtoMember(4)]
+    public int RegionSize; // total size in blocks
+    [ProtoMember(5)]
     public FarRegionHeightmap Heightmap;
 }
 
@@ -45,7 +47,7 @@ public class FarRegionData
 public class FarRegionHeightmap
 {
     [ProtoMember(1)]
-    public int Resolution; // samples per chunk
+    public int GridSize; // ..of each axis
     [ProtoMember(2)]
-    public int[] Heightmap;
+    public int[] Points;
 }
