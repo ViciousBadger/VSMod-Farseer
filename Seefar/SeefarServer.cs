@@ -11,7 +11,7 @@ public class SeefarServer : IDisposable
 
     FarChunkMap map;
 
-    TerrainDB terrainDB;
+    FarDB farDB;
 
     public SeefarServer(ModSystem mod, ICoreServerAPI sapi)
     {
@@ -28,6 +28,9 @@ public class SeefarServer : IDisposable
         {
             channel.BroadcastPacket(new FarChunkMessage { ChunkPosX = coord.X, ChunkPosZ = coord.Y, Heightmap = chunk.Heightmap });
         };
+
+        var asdf = sapi.Event.GetRegisteredWorldGenHandlers("standard");
+        sapi.Logger.Notification(asdf.ToString());
     }
 
     private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)

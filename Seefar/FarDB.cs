@@ -3,9 +3,9 @@ namespace Seefar;
 using Microsoft.Data.Sqlite;
 using Vintagestory.API.Common;
 
-public class TerrainDB : SQLiteDBConnection
+public class FarDB : SQLiteDBConnection
 {
-    public TerrainDB(ILogger logger) : base(logger)
+    public FarDB(ILogger logger) : base(logger)
     {
     }
 
@@ -23,5 +23,4 @@ public class TerrainDB : SQLiteDBConnection
         }
     }
 
-    public void SetRegion(
 }

@@ -41,6 +41,7 @@ void main()
 
     color = mix(horizonColorNight, horizonColorDay, dayLight);
     color *= fogColor;
+    color.rgb -= clamp((2048 - length(worldPos.xz)) / 1024.0, 0.0, 1.0) * 0.1;
     color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, -1, 1);
 
     gl_Position = projectionMatrix * camPos;

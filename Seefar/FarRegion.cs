@@ -1,12 +1,12 @@
 
 namespace Seefar;
 
-public class TerrainRegion
+public class FarRegion
 {
     private int[] heightmap;
     private int columnsPerRow;
 
-    public TerrainRegion()
+    public FarRegion()
     {
         heightmap = new int[0];
     }
