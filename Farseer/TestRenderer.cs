@@ -3,7 +3,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
-namespace Seefar;
+namespace Farseer;
 
 public class TestRenderer : IRenderer
 {

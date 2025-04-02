@@ -1,4 +1,4 @@
-namespace Seefar;
+namespace Farseer;
 
 using Microsoft.Data.Sqlite;
 using Vintagestory.API.Common;

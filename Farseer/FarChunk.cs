@@ -1,4 +1,4 @@
-namespace Seefar;
+namespace Farseer;
 
 public class FarChunk
 {

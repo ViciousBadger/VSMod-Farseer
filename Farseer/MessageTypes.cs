@@ -1,7 +1,7 @@
 
 using ProtoBuf;
 
-namespace Seefar;
+namespace Farseer;
 
 [ProtoContract]
 public class FarChunkMessage
@@ -15,7 +15,7 @@ public class FarChunkMessage
 }
 
 [ProtoContract]
-public class EnableSeefarRequest
+public class FarEnableRequest
 {
     [ProtoMember(1)]
     public int DesiredRenderDistance;

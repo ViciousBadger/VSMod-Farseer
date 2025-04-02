@@ -1,0 +1,13 @@
+{
+  "type": "code",
+  "modid": "farseer",
+  "name": "Farseer",
+  "authors": [
+    "Badgerson"
+  ],
+  "description": "To be added",
+  "version": "1.0.0",
+  "dependencies": {
+    "game": ""
+  }
+}

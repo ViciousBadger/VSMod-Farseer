@@ -3,7 +3,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
-namespace Seefar;
+namespace Farseer;
 
 public class FarChunkRenderer : IRenderer
 {
@@ -48,7 +48,7 @@ public class FarChunkRenderer : IRenderer
     {
         prog = capi.Shader.NewShaderProgram();
 
-        prog.AssetDomain = "seefar";
+        prog.AssetDomain = "farseer";
         prog.VertexShader = capi.Shader.NewShader(EnumShaderType.VertexShader);
         prog.FragmentShader = capi.Shader.NewShader(EnumShaderType.FragmentShader);
 

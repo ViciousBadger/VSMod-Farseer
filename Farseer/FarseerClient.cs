@@ -4,10 +4,10 @@ using System;
 using Vintagestory.Common;
 using Vintagestory.Client.NoObf;
 
-namespace Seefar;
+namespace Farseer;
 
 
-public class SeefarClient : IDisposable
+public class FarseerClient : IDisposable
 {
     ModSystem modSystem;
     ICoreClientAPI capi;
@@ -16,7 +16,7 @@ public class SeefarClient : IDisposable
 
     FarChunkMap map;
 
-    public SeefarClient(ModSystem mod, ICoreClientAPI api)
+    public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {
         this.modSystem = mod;
         this.capi = api;
@@ -31,8 +31,8 @@ public class SeefarClient : IDisposable
 
     public void Init()
     {
-        var channel = capi.Network.GetChannel("seefar");
-        channel.SendPacket(new EnableSeefarRequest
+        var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
+        channel.SendPacket(new FarEnableRequest
         {
             DesiredRenderDistance = 8,
         });

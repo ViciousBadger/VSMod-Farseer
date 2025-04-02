@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace Seefar;
+namespace Farseer;
 
 public class FarChunkMap
 {
@@ -43,7 +43,5 @@ public class FarChunkMap
         loadedChunks.Add(coord, farchunk);
 
         NewChunkLoaded?.Invoke(coord, farchunk);
-
-        // SeefarModSystem.Logger.Notification("[{0}]", string.Join(", ", heightmap));
     }
 }

@@ -2,32 +2,34 @@
 using Vintagestory.API.Server;
 using Vintagestory.API.Common;
 
-namespace Seefar;
+namespace Farseer;
 
-public class SeefarModSystem : ModSystem
+public class FarseerModSystem : ModSystem
 {
-    SeefarServer server;
-    SeefarClient client;
+    FarseerServer server;
+    FarseerClient client;
+
+    public const string MOD_CHANNEL_NAME = "farseer";
 
     // Called on server and client
     // Useful for registering block/entity classes on both sides
     public override void Start(ICoreAPI api)
     {
-        api.Network.RegisterChannel("seefar")
+        api.Network.RegisterChannel(MOD_CHANNEL_NAME)
             .RegisterMessageType<FarChunkMessage>()
-            .RegisterMessageType<EnableSeefarRequest>()
+            .RegisterMessageType<FarEnableRequest>()
             .RegisterMessageType<FarRegionRequest>()
             .RegisterMessageType<FarRegionData>();
     }
 
     public override void StartServerSide(ICoreServerAPI api)
     {
-        this.server = new SeefarServer(this, api);
+        this.server = new FarseerServer(this, api);
     }
 
     public override void StartClientSide(ICoreClientAPI api)
     {
-        this.client = new SeefarClient(this, api);
+        this.client = new FarseerClient(this, api);
     }
 
     public override void Dispose()

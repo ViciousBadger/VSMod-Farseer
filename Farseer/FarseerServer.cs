@@ -3,9 +3,9 @@ using Vintagestory.API.Common;
 using System;
 using System.Collections.Generic;
 
-namespace Seefar;
+namespace Farseer;
 
-public class SeefarServer : IDisposable
+public class FarseerServer : IDisposable
 {
     public class FarseePlayer
     {
@@ -19,7 +19,7 @@ public class SeefarServer : IDisposable
 
     // FarChunkMap map;
 
-    public SeefarServer(ModSystem mod, ICoreServerAPI sapi)
+    public FarseerServer(ModSystem mod, ICoreServerAPI sapi)
     {
         this.modSystem = mod;
         this.sapi = sapi;
@@ -34,13 +34,11 @@ public class SeefarServer : IDisposable
         //
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
 
-        var channel = sapi.Network.GetChannel("seefar");
-
-        // Wait for clients to "register" themselves as having Farsee mod installed and also to know their renderdistance.
-        channel.SetMessageHandler<EnableSeefarRequest>(EnableFarseeForPlayer);
+        var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
+        channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
     }
 
-    private void EnableFarseeForPlayer(IServerPlayer fromPlayer, EnableSeefarRequest request)
+    private void EnableFarseeForPlayer(IServerPlayer fromPlayer, FarEnableRequest request)
     {
         if (players.TryGetValue(fromPlayer, out FarseePlayer player))
         {
