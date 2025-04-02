@@ -34,5 +34,18 @@ public class FarRegionData
     [ProtoMember(1)]
     public long RegionIndex;
     [ProtoMember(2)]
+    public int RegionX;
+    [ProtoMember(3)]
+    public int RegionZ;
+    [ProtoMember(4)]
+    public FarRegionHeightmap Heightmap;
+}
+
+[ProtoContract]
+public class FarRegionHeightmap
+{
+    [ProtoMember(1)]
+    public int Resolution; // samples per chunk
+    [ProtoMember(2)]
     public int[] Heightmap;
 }

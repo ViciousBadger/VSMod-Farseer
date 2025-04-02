@@ -26,8 +26,15 @@ public class FarseerClient : IDisposable
         // channel.SetMessageHandler<FarChunkMessage>(OnRecieveFarChunkMessage);
 
         capi.Event.LevelFinalize += Init;
+
+        var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
+        channel.SetMessageHandler<FarRegionData>(OnRecieveFarRegionData);
     }
 
+    private void OnRecieveFarRegionData(FarRegionData data)
+    {
+        modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Resolution {3}, Length {4}", data.RegionIndex, data.RegionX, data.RegionZ, data.Heightmap.Resolution, data.Heightmap.Heightmap.Length);
+    }
 
     public void Init()
     {
