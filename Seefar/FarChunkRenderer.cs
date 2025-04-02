@@ -48,6 +48,7 @@ public class FarChunkRenderer : IRenderer
     {
         prog = capi.Shader.NewShaderProgram();
 
+        prog.AssetDomain = "seefar";
         prog.VertexShader = capi.Shader.NewShader(EnumShaderType.VertexShader);
         prog.FragmentShader = capi.Shader.NewShader(EnumShaderType.FragmentShader);
 

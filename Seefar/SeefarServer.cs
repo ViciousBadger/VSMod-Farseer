@@ -1,50 +1,76 @@
-namespace Seefar;
 using Vintagestory.API.Server;
 using Vintagestory.API.Common;
-using Vintagestory.API.MathTools;
 using System;
+using System.Collections.Generic;
+
+namespace Seefar;
 
 public class SeefarServer : IDisposable
 {
+    public class FarseePlayer
+    {
+        public int DesiredRenderDistance { get; set; }
+    }
+
     ModSystem modSystem;
     ICoreServerAPI sapi;
 
-    FarChunkMap map;
+    Dictionary<IServerPlayer, FarseePlayer> players = new Dictionary<IServerPlayer, FarseePlayer>();
 
-    FarDB farDB;
+    // FarChunkMap map;
 
     public SeefarServer(ModSystem mod, ICoreServerAPI sapi)
     {
         this.modSystem = mod;
         this.sapi = sapi;
 
-        this.map = new FarChunkMap();
 
-        sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
+        // this.map = new FarChunkMap();
+        // sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
+        // map.NewChunkLoaded += (coord, chunk) =>
+        // {
+        //     channel.BroadcastPacket(new FarChunkMessage { ChunkPosX = coord.X, ChunkPosZ = coord.Y, Heightmap = chunk.Heightmap });
+        // };
         //
+        sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
+
         var channel = sapi.Network.GetChannel("seefar");
 
-        map.NewChunkLoaded += (coord, chunk) =>
-        {
-            channel.BroadcastPacket(new FarChunkMessage { ChunkPosX = coord.X, ChunkPosZ = coord.Y, Heightmap = chunk.Heightmap });
-        };
-
-        var asdf = sapi.Event.GetRegisteredWorldGenHandlers("standard");
-        sapi.Logger.Notification(asdf.ToString());
+        // Wait for clients to "register" themselves as having Farsee mod installed and also to know their renderdistance.
+        channel.SetMessageHandler<EnableSeefarRequest>(EnableFarseeForPlayer);
     }
 
-    private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
+    private void EnableFarseeForPlayer(IServerPlayer fromPlayer, EnableSeefarRequest request)
     {
-        // sapi.Logger.Notification("chunks length " + chunks.Length);
-        this.map.LoadFromWorld(chunkCoord, chunks[0]);
-        // for (int i = 0; i < chunks.Length; i++)
-        // {
-        //     this.map.LoadFromWorld(new Vec2i(chunkCoord.X, chunkCoord.Y + i), chunks[i]);
-        // }
+        if (players.TryGetValue(fromPlayer, out FarseePlayer player))
+        {
+            // Just update the desired render distance.
+            // TODO: Send more if its larger i guess
+            player.DesiredRenderDistance = request.DesiredRenderDistance;
+        }
+        else
+        {
+            players.Add(fromPlayer, new FarseePlayer() { DesiredRenderDistance = request.DesiredRenderDistance });
+        }
+        modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
     }
+
+    private void OnPlayerDisconnect(IServerPlayer byPlayer)
+    {
+        if (players.ContainsKey(byPlayer))
+        {
+            players.Remove(byPlayer);
+        }
+    }
+
+    // private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
+    // {
+    //     this.map.LoadFromWorld(chunkCoord, chunks[0]);
+    // }
+    //
 
     public void Dispose()
     {
-        sapi.Event.ChunkColumnLoaded -= OnChunkColumnLoaded;
+        // sapi.Event.ChunkColumnLoaded -= OnChunkColumnLoaded;
     }
 }
