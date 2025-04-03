@@ -18,14 +18,16 @@ public class FarRegionRenderer : IRenderer
     public int RenderRange => 9999;
 
     private ICoreClientAPI capi;
+    private int farViewDistance;
     private Dictionary<long, PerModelData> activeRegionModels = new Dictionary<long, PerModelData>();
 
     private Matrixf modelMat = new Matrixf();
     private IShaderProgram prog;
 
-    public FarRegionRenderer(ICoreClientAPI api)
+    public FarRegionRenderer(ICoreClientAPI api, int farViewDistance)
     {
         this.capi = api;
+        this.farViewDistance = farViewDistance;
 
         api.Event.ReloadShader += LoadShader;
         LoadShader();
@@ -55,19 +57,34 @@ public class FarRegionRenderer : IRenderer
         var gridSize = sourceData.Heightmap.GridSize;
         float cellSize = sourceData.RegionSize / (float)gridSize;
 
-        mesh.xyz = new float[(gridSize + 1) * (gridSize + 1) * 3];
-        mesh.Indices = new int[gridSize * gridSize * 6]; // 2 triangles per cell, 3 indices per triangle
+        var vertexCount = (gridSize + 1) * (gridSize + 1);
+        mesh.SetVerticesCount(vertexCount);
+        mesh.xyz = new float[vertexCount * 3];
+
+        var indicesCount = gridSize * gridSize * 6;
+        mesh.SetIndicesCount(indicesCount);
+        mesh.Indices = new int[indicesCount]; // 2 triangles per cell, 3 indices per triangle
 
         int xyz = 0;
+        for (int i = 0; i <= gridSize; i++)
+        {
+            for (int j = 0; j <= gridSize; j++)
+            {
+                mesh.xyz[xyz++] = j * cellSize;
+                // For vertices at the edges, use nearest available height data
+                int hi = Math.Min(i, gridSize - 1);
+                int hj = Math.Min(j, gridSize - 1);
+                mesh.xyz[xyz++] = sourceData.Heightmap.Points[hi * gridSize + hj];
+                mesh.xyz[xyz++] = i * cellSize;
+
+            }
+        }
+
         int index = 0;
         for (int i = 0; i < gridSize; i++)
         {
             for (int j = 0; j < gridSize; j++)
             {
-                mesh.xyz[xyz++] = j * cellSize;
-                mesh.xyz[xyz++] = sourceData.Heightmap.Points[i * gridSize + j];
-                mesh.xyz[xyz++] = i * cellSize;
-
                 // First triangle of the cell
                 mesh.Indices[index++] = i * (gridSize + 1) + j;           // Top-left
                 mesh.Indices[index++] = (i + 1) * (gridSize + 1) + j;     // Bottom-left
@@ -129,8 +146,9 @@ public class FarRegionRenderer : IRenderer
             prog.Uniform("fogColor", capi.Ambient.BlendedFogColor);
             prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength * 0.95f));
             prog.Uniform("viewDistance", (float)capi.World.Player.WorldData.DesiredViewDistance);
+            prog.Uniform("farViewDistance", (float)this.farViewDistance);
 
-            //rapi.GlToggleBlend(true, EnumBlendMode.Standard);
+            rapi.GlToggleBlend(true, EnumBlendMode.Standard);
             rapi.RenderMesh(regionModel.MeshRef);
 
             prog.Stop();

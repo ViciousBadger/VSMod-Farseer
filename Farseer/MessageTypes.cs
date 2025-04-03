@@ -18,7 +18,7 @@ public class FarChunkMessage
 public class FarEnableRequest
 {
     [ProtoMember(1)]
-    public int DesiredRenderDistance;
+    public int FarViewDistance = 2048;
 }
 
 [ProtoContract]

@@ -16,13 +16,15 @@ public class FarseerClient : IDisposable
 
     FarChunkMap map;
 
+    int farRenderDistance = 2048;
+
     public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {
         this.modSystem = mod;
         this.capi = api;
         this.map = new FarChunkMap();
 
-        this.renderer = new FarRegionRenderer(api);
+        this.renderer = new FarRegionRenderer(api, farRenderDistance);
         // this.renderer = new FarChunkRenderer(api, map);
         // channel.SetMessageHandler<FarChunkMessage>(OnRecieveFarChunkMessage);
 
@@ -44,7 +46,7 @@ public class FarseerClient : IDisposable
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SendPacket(new FarEnableRequest
         {
-            DesiredRenderDistance = 8,
+            FarViewDistance = farRenderDistance,
         });
     }
 

@@ -9,7 +9,7 @@ public class FarseerServer : IDisposable
 {
     public class FarseePlayer
     {
-        public int DesiredRenderDistance { get; set; }
+        public int FarViewDistance { get; set; }
     }
 
     ModSystem modSystem;
@@ -49,11 +49,11 @@ public class FarseerServer : IDisposable
         {
             // Just update the desired render distance.
             // TODO: Send more if its larger i guess
-            player.DesiredRenderDistance = request.DesiredRenderDistance;
+            player.FarViewDistance = 2048;
         }
         else
         {
-            players.Add(fromPlayer, new FarseePlayer() { DesiredRenderDistance = request.DesiredRenderDistance });
+            players.Add(fromPlayer, new FarseePlayer() { FarViewDistance = request.FarViewDistance = 2048 });
         }
         modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
 
@@ -65,9 +65,13 @@ public class FarseerServer : IDisposable
 
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
 
-        for (var x = -request.DesiredRenderDistance; x <= request.DesiredRenderDistance; x++)
+        modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
+
+        int farViewDistanceInRegions = request.FarViewDistance / sapi.WorldManager.RegionSize;
+
+        for (var x = -farViewDistanceInRegions; x <= farViewDistanceInRegions; x++)
         {
-            for (var z = -request.DesiredRenderDistance; z <= request.DesiredRenderDistance; z++)
+            for (var z = -farViewDistanceInRegions; z <= farViewDistanceInRegions; z++)
             {
                 var thisRegionX = playerRegionCoord.X + x;
                 var thisRegionZ = playerRegionCoord.Z + z;
