@@ -15,6 +15,11 @@ public class FarGen
         this.sapi = sapi;
     }
 
+    public FarRegionHeightmap GenerateRegion(long regionIdx)
+    {
+        return null;
+    }
+
     public FarRegionHeightmap GenerateDummyData(long regionIdx)
     {
         int gridSize = 32;

@@ -91,7 +91,7 @@ public class FarseerServer : IDisposable
         var regionsToUnload = new List<long>();
         foreach (var regionIdx in allLoadedRegions.Keys)
         {
-            if (playersWithFarsee.Values.All(playerData => playerData.LoadedRegionsForPlayer.Contains(regionIdx)))
+            if (playersWithFarsee.Values.All(playerData => !playerData.LoadedRegionsForPlayer.Contains(regionIdx)))
             {
                 regionsToUnload.Add(regionIdx);
             }
