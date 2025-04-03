@@ -22,7 +22,7 @@ public class FarEnableRequest
 }
 
 [ProtoContract]
-public class FarRegionRequest
+public class FarRegionUnload
 {
     [ProtoMember(1)]
     public long RegionIndex;

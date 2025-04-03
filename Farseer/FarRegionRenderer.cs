@@ -69,6 +69,7 @@ public class FarRegionRenderer : IRenderer
 
     public void BuildRegion(FarRegionData sourceData)
     {
+
         var mesh = new MeshData(false);
 
         var gridSize = sourceData.Heightmap.GridSize;
@@ -114,6 +115,11 @@ public class FarRegionRenderer : IRenderer
             }
         }
 
+        if (activeRegionModels.ContainsKey(sourceData.RegionIndex))
+        {
+            activeRegionModels.Remove(sourceData.RegionIndex);
+        }
+
         activeRegionModels.Add(sourceData.RegionIndex, new PerModelData()
         {
             Position = new Vec3d(
@@ -128,6 +134,15 @@ public class FarRegionRenderer : IRenderer
                     sourceData.RegionX * sourceData.RegionSize,
                     sourceData.RegionZ * sourceData.RegionSize
                 );
+    }
+
+    public void UnloadRegion(long regionIdx)
+    {
+        if (activeRegionModels.TryGetValue(regionIdx, out PerModelData model))
+        {
+            model.MeshRef.Dispose();
+            activeRegionModels.Remove(regionIdx);
+        }
     }
 
     public void Dispose()

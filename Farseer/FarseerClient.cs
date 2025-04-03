@@ -32,14 +32,21 @@ public class FarseerClient : IDisposable
 
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarRegionData>(OnRecieveFarRegionData);
+        channel.SetMessageHandler<FarRegionUnload>(OnRecieveFarRegionUnload);
     }
 
     private void OnRecieveFarRegionData(FarRegionData data)
     {
-        modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Size {3}, Resolution {4}, Length {5}", data.RegionIndex, data.RegionX, data.RegionZ, data.RegionSize, data.Heightmap.GridSize, data.Heightmap.Points.Length);
+        //modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Size {3}, Resolution {4}, Length {5}", data.RegionIndex, data.RegionX, data.RegionZ, data.RegionSize, data.Heightmap.GridSize, data.Heightmap.Points.Length);
 
         renderer.BuildRegion(data);
     }
+
+    private void OnRecieveFarRegionUnload(FarRegionUnload packet)
+    {
+        renderer.UnloadRegion(packet.RegionIndex);
+    }
+
 
     public void Init()
     {

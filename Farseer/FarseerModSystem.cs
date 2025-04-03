@@ -18,7 +18,7 @@ public class FarseerModSystem : ModSystem
         api.Network.RegisterChannel(MOD_CHANNEL_NAME)
             .RegisterMessageType<FarChunkMessage>()
             .RegisterMessageType<FarEnableRequest>()
-            .RegisterMessageType<FarRegionRequest>()
+            .RegisterMessageType<FarRegionUnload>()
             .RegisterMessageType<FarRegionData>();
     }
 
