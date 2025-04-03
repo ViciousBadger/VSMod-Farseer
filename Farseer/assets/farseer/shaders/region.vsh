@@ -23,11 +23,10 @@ void main()
 
     color = mix(horizonColorNight, horizonColorDay, dayLight);
     color *= fogColor;
-    //color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, -1, 1);
+    color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, 0.0, 1.0);
 
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);
-
-    color.a -= distFade * distFade;
+    color.rgb += distFade * 0.2;
 
     vec4 camPos = viewMatrix * worldPos;
 

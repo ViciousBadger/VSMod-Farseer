@@ -15,14 +15,14 @@ public class FarseerServer : IDisposable
     ModSystem modSystem;
     ICoreServerAPI sapi;
 
-    FarDB db;
+    FarRegionAccess regionAccess;
     Dictionary<IServerPlayer, FarseePlayer> players = new Dictionary<IServerPlayer, FarseePlayer>();
 
     public FarseerServer(ModSystem mod, ICoreServerAPI sapi)
     {
         this.modSystem = mod;
         this.sapi = sapi;
-        this.db = new FarDB(mod.Mod.Logger);
+        this.regionAccess = new FarRegionAccess(modSystem, sapi);
 
         // this.map = new FarChunkMap();
         // sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
@@ -75,40 +75,12 @@ public class FarseerServer : IDisposable
             {
                 var thisRegionX = playerRegionCoord.X + x;
                 var thisRegionZ = playerRegionCoord.Z + z;
-
-                var regionData = GetFarRegionData(thisRegionX, thisRegionZ);
+                var thisIdx = sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ);
+                var regionData = regionAccess.GetDummyData(thisIdx);
 
                 channel.SendPacket(regionData, fromPlayer);
             }
         }
-    }
-
-    private FarRegionData GetFarRegionData(long regionIdx)
-    {
-        var regionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
-        var regionHeightmap = db.GetFarRegion(regionIdx);
-        return new FarRegionData
-        {
-            RegionIndex = regionIdx,
-            RegionX = regionCoord.X,
-            RegionZ = regionCoord.Z,
-            RegionSize = sapi.WorldManager.RegionSize,
-            Heightmap = regionHeightmap,
-        };
-    }
-
-    private FarRegionData GetFarRegionData(int regionX, int regionZ)
-    {
-        var regionIdx = sapi.WorldManager.MapRegionIndex2D(regionX, regionZ);
-        var regionHeightmap = db.GetFarRegion(regionIdx);
-        return new FarRegionData
-        {
-            RegionIndex = regionIdx,
-            RegionX = regionX,
-            RegionZ = regionZ,
-            RegionSize = sapi.WorldManager.RegionSize,
-            Heightmap = regionHeightmap,
-        };
     }
 
     private void OnPlayerDisconnect(IServerPlayer byPlayer)
@@ -119,14 +91,8 @@ public class FarseerServer : IDisposable
         }
     }
 
-    // private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
-    // {
-    //     this.map.LoadFromWorld(chunkCoord, chunks[0]);
-    // }
-    //
 
     public void Dispose()
     {
-        // sapi.Event.ChunkColumnLoaded -= OnChunkColumnLoaded;
     }
 }

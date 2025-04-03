@@ -16,7 +16,7 @@ public class FarseerClient : IDisposable
 
     FarChunkMap map;
 
-    int farRenderDistance = 2048;
+    int farRenderDistance = 3072;
 
     public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {

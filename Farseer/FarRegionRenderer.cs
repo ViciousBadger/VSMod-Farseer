@@ -24,15 +24,32 @@ public class FarRegionRenderer : IRenderer
     private Matrixf modelMat = new Matrixf();
     private IShaderProgram prog;
 
-    public FarRegionRenderer(ICoreClientAPI api, int farViewDistance)
+    private EnumBlendMode blendMode = EnumBlendMode.Standard;
+
+    public FarRegionRenderer(ICoreClientAPI capi, int farViewDistance)
     {
-        this.capi = api;
+        this.capi = capi;
         this.farViewDistance = farViewDistance;
 
-        api.Event.ReloadShader += LoadShader;
+        capi.Event.ReloadShader += LoadShader;
         LoadShader();
 
-        api.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
+        capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
+
+        capi.Event.KeyDown += Blendtest;
+    }
+
+    private void Blendtest(KeyEvent e)
+    {
+
+        if (e.KeyCode == 84) //b
+        {
+            EnumBlendMode[] values = (EnumBlendMode[])Enum.GetValues(typeof(EnumBlendMode));
+            int currentIndex = Array.IndexOf(values, blendMode);
+            int nextIndex = (currentIndex + 1) % values.Length;
+            blendMode = values[nextIndex];
+            capi.Logger.Notification(blendMode.ToString());
+        }
     }
 
     public bool LoadShader()
@@ -148,7 +165,7 @@ public class FarRegionRenderer : IRenderer
             prog.Uniform("viewDistance", (float)capi.World.Player.WorldData.DesiredViewDistance);
             prog.Uniform("farViewDistance", (float)this.farViewDistance);
 
-            rapi.GlToggleBlend(true, EnumBlendMode.Standard);
+            rapi.GlToggleBlend(true, blendMode);
             rapi.RenderMesh(regionModel.MeshRef);
 
             prog.Stop();
