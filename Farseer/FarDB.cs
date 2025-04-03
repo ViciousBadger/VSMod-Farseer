@@ -25,19 +25,20 @@ public class FarDB : SQLiteDBConnection
 
     public FarRegionHeightmap GetFarRegion(long regionIndex)
     {
-        int heightmapSize = 16 * 16;
+        int gridSize = 32;
+        int heightmapSize = gridSize * gridSize;
         var heightmap = new int[heightmapSize];
         var region = new FarRegionHeightmap
         {
-            GridSize = 16,
+            GridSize = gridSize,
             Points = heightmap
         };
 
-        for (int x = 0; x < 16; x++)
+        for (int x = 0; x < gridSize; x++)
         {
-            for (int z = 0; z < 16; z++)
+            for (int z = 0; z < gridSize; z++)
             {
-                heightmap[z * 16 + x] = x + z;
+                heightmap[z * gridSize + x] = 200 + x + z;
             }
         }
         return region;

@@ -75,21 +75,40 @@ public class FarseerServer : IDisposable
             {
                 var thisRegionX = playerRegionCoord.X + x;
                 var thisRegionZ = playerRegionCoord.Z + z;
-                var thisRegionIdx = sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ);
 
-                var regionHeightmap = db.GetFarRegion(thisRegionIdx);
-                var regionData = new FarRegionData
-                {
-                    RegionIndex = thisRegionIdx,
-                    RegionX = thisRegionX,
-                    RegionZ = thisRegionZ,
-                    RegionSize = sapi.WorldManager.RegionSize,
-                    Heightmap = regionHeightmap,
-                };
+                var regionData = GetFarRegionData(thisRegionX, thisRegionZ);
 
                 channel.SendPacket(regionData, fromPlayer);
             }
         }
+    }
+
+    private FarRegionData GetFarRegionData(long regionIdx)
+    {
+        var regionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
+        var regionHeightmap = db.GetFarRegion(regionIdx);
+        return new FarRegionData
+        {
+            RegionIndex = regionIdx,
+            RegionX = regionCoord.X,
+            RegionZ = regionCoord.Z,
+            RegionSize = sapi.WorldManager.RegionSize,
+            Heightmap = regionHeightmap,
+        };
+    }
+
+    private FarRegionData GetFarRegionData(int regionX, int regionZ)
+    {
+        var regionIdx = sapi.WorldManager.MapRegionIndex2D(regionX, regionZ);
+        var regionHeightmap = db.GetFarRegion(regionIdx);
+        return new FarRegionData
+        {
+            RegionIndex = regionIdx,
+            RegionX = regionX,
+            RegionZ = regionZ,
+            RegionSize = sapi.WorldManager.RegionSize,
+            Heightmap = regionHeightmap,
+        };
     }
 
     private void OnPlayerDisconnect(IServerPlayer byPlayer)
