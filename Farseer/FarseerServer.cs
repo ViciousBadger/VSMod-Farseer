@@ -76,7 +76,7 @@ public class FarseerServer : IDisposable
                 var thisRegionX = playerRegionCoord.X + x;
                 var thisRegionZ = playerRegionCoord.Z + z;
                 var thisIdx = sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ);
-                var regionData = regionAccess.GetDummyData(thisIdx);
+                var regionData = regionAccess.GetOrGenerateRegion(thisIdx);
 
                 channel.SendPacket(regionData, fromPlayer);
             }
@@ -94,5 +94,6 @@ public class FarseerServer : IDisposable
 
     public void Dispose()
     {
+        this.regionAccess?.Dispose();
     }
 }

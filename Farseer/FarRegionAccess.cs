@@ -1,13 +1,17 @@
+using System;
+using System.IO;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
 namespace Farseer;
 
-public class FarRegionAccess
+public class FarRegionAccess : IDisposable
 {
     private ModSystem modSystem;
     private ICoreServerAPI sapi;
     private FarDB db;
+    private FarGen generator;
 
     public FarRegionAccess(ModSystem modSystem, ICoreServerAPI sapi)
     {
@@ -15,27 +19,37 @@ public class FarRegionAccess
         this.sapi = sapi;
 
         this.db = new FarDB(modSystem.Mod.Logger);
+        string errorMessage = null;
+        string path = GetDbFilePath();
+        db.OpenOrCreate(path, ref errorMessage, true, true, false);
+        if (errorMessage != null)
+        {
+            throw new Exception(string.Format("Cannot open {0}, possibly corrupted. Please fix manually or delete this file to continue playing", path));
+        }
+
+        this.generator = new FarGen(modSystem, sapi);
     }
 
-    public FarRegionData GetDummyData(long regionIdx)
+    private string GetDbFilePath()
     {
-        int gridSize = 32;
-        int heightmapSize = gridSize * gridSize;
-        var heightmapPoints = new int[heightmapSize];
-        var heightmapObj = new FarRegionHeightmap
-        {
-            GridSize = gridSize,
-            Points = heightmapPoints
-        };
+        string path = Path.Combine(GamePaths.DataPath, "Farseer");
+        GamePaths.EnsurePathExists(path);
+        return Path.Combine(path, sapi.World.SavegameIdentifier + ".db");
+    }
 
-        for (int x = 0; x < gridSize; x++)
+    public FarRegionData GetOrGenerateRegion(long regionIdx)
+    {
+        var storedRegion = db.GetRegionHeightmap(regionIdx);
+        if (storedRegion != null)
         {
-            for (int z = 0; z < gridSize; z++)
-            {
-                heightmapPoints[z * gridSize + x] = 130 + sapi.World.Rand.Next() % 64;
-            }
+            return CreateDataObject(regionIdx, storedRegion);
         }
-        return CreateDataObject(regionIdx, heightmapObj);
+        else
+        {
+            var newRegion = generator.GenerateDummyData(regionIdx);
+            db.InsertRegionHeightmap(regionIdx, newRegion);
+            return CreateDataObject(regionIdx, newRegion);
+        }
     }
 
     private FarRegionData CreateDataObject(long regionIdx, FarRegionHeightmap heightmap)
@@ -49,5 +63,10 @@ public class FarRegionAccess
             RegionSize = sapi.WorldManager.RegionSize,
             Heightmap = heightmap,
         };
+    }
+
+    public void Dispose()
+    {
+        this.db?.Dispose();
     }
 }
