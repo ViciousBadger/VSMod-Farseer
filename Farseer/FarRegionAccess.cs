@@ -28,6 +28,8 @@ public class FarRegionAccess : IDisposable
         }
 
         this.generator = new FarGen(modSystem, sapi);
+
+        this.generator.GenerateRegion(0);
     }
 
     private string GetDbFilePath()
@@ -46,7 +48,7 @@ public class FarRegionAccess : IDisposable
         }
         else
         {
-            var newRegion = generator.GenerateDummyData(regionIdx);
+            var newRegion = generator.GenerateRegion(regionIdx);
             db.InsertRegionHeightmap(regionIdx, newRegion);
             return CreateDataObject(regionIdx, newRegion);
         }

@@ -20,7 +20,7 @@ public class FarseerServer : IDisposable
     FarRegionAccess regionAccess;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarsee = new Dictionary<IServerPlayer, FarseePlayer>();
 
-    Dictionary<long, FarRegionData> allLoadedRegions = new Dictionary<long, FarRegionData>();
+    Dictionary<long, FarRegionData> regionDataCache = new Dictionary<long, FarRegionData>();
 
     public FarseerServer(ModSystem mod, ICoreServerAPI sapi)
     {
@@ -64,15 +64,15 @@ public class FarseerServer : IDisposable
     private void LoadRegionForPlayer(IServerPlayer serverPlayer, long regionIdx)
     {
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        if (allLoadedRegions.ContainsKey(regionIdx))
+        if (regionDataCache.ContainsKey(regionIdx))
         {
-            channel.SendPacket(allLoadedRegions[regionIdx], serverPlayer);
+            channel.SendPacket(regionDataCache[regionIdx], serverPlayer);
             modSystem.Mod.Logger.Notification("region {0} loaded for player {1} (was cached)", regionIdx, serverPlayer.PlayerName);
         }
         else
         {
             var newlyLoadedData = regionAccess.GetOrGenerateRegion(regionIdx);
-            allLoadedRegions.Add(regionIdx, newlyLoadedData);
+            regionDataCache.Add(regionIdx, newlyLoadedData);
             channel.SendPacket(newlyLoadedData, serverPlayer);
             modSystem.Mod.Logger.Notification("region {0} loaded for player {1} (was accessed)", regionIdx, serverPlayer.PlayerName);
         }
@@ -89,7 +89,7 @@ public class FarseerServer : IDisposable
     private void DropUnusedRegions()
     {
         var regionsToUnload = new List<long>();
-        foreach (var regionIdx in allLoadedRegions.Keys)
+        foreach (var regionIdx in regionDataCache.Keys)
         {
             if (playersWithFarsee.Values.All(playerData => !playerData.LoadedRegionsForPlayer.Contains(regionIdx)))
             {
@@ -99,7 +99,7 @@ public class FarseerServer : IDisposable
 
         foreach (var regionIdx in regionsToUnload)
         {
-            allLoadedRegions.Remove(regionIdx);
+            regionDataCache.Remove(regionIdx);
             modSystem.Mod.Logger.Notification("region {0} dropped as no players are in range", regionIdx);
         }
     }

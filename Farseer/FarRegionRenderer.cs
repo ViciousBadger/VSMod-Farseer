@@ -36,7 +36,7 @@ public class FarRegionRenderer : IRenderer
 
         capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
 
-        capi.Event.KeyDown += Blendtest;
+        //capi.Event.KeyDown += Blendtest;
     }
 
     private void Blendtest(KeyEvent e)
@@ -94,7 +94,6 @@ public class FarRegionRenderer : IRenderer
                 int hj = Math.Min(j, gridSize - 1);
                 mesh.xyz[xyz++] = sourceData.Heightmap.Points[hi * gridSize + hj];
                 mesh.xyz[xyz++] = i * cellSize;
-
             }
         }
 
@@ -130,10 +129,10 @@ public class FarRegionRenderer : IRenderer
             MeshRef = capi.Render.UploadMesh(mesh),
         });
 
-        capi.Logger.Notification("new region, pos x {0}, z {1}",
-                    sourceData.RegionX * sourceData.RegionSize,
-                    sourceData.RegionZ * sourceData.RegionSize
-                );
+        // capi.Logger.Notification("new region, pos x {0}, z {1}",
+        //             sourceData.RegionX * sourceData.RegionSize,
+        //             sourceData.RegionZ * sourceData.RegionSize
+        //         );
     }
 
     public void UnloadRegion(long regionIdx)
