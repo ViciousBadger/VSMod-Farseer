@@ -69,7 +69,7 @@ public class FarRegionProvider : IDisposable
 
     private void OnFarRegionGenerated(long regionIdx, FarRegionHeightmap generatedHeightmap)
     {
-        // db.InsertRegionHeightmap(regionIdx, generatedHeightmap);
+        db.InsertRegionHeightmap(regionIdx, generatedHeightmap);
         var newRegionData = CreateDataObject(regionIdx, generatedHeightmap);
         inMemoryRegionCache.Add(regionIdx, newRegionData);
         RegionReady?.Invoke(newRegionData);

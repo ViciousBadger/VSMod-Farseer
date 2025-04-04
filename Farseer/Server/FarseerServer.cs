@@ -136,15 +136,24 @@ public class FarseerServer : IDisposable
         int farViewDistanceInRegions = player.FarViewDistance / sapi.WorldManager.RegionSize;
 
         var result = new HashSet<long>();
-        for (var x = -farViewDistanceInRegions - 1; x <= farViewDistanceInRegions + 1; x++)
+
+        var walker = new SpiralWalker(new Coord2D(), farViewDistanceInRegions);
+        foreach (var coord in walker)
         {
-            for (var z = -farViewDistanceInRegions - 1; z <= farViewDistanceInRegions + 1; z++)
-            {
-                var thisRegionX = playerRegionCoord.X + x;
-                var thisRegionZ = playerRegionCoord.Z + z;
-                result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
-            }
+            var thisRegionX = playerRegionCoord.X + coord.X;
+            var thisRegionZ = playerRegionCoord.Z + coord.Z;
+            result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
         }
+
+        // for (var x = -farViewDistanceInRegions - 1; x <= farViewDistanceInRegions + 1; x++)
+        // {
+        //     for (var z = -farViewDistanceInRegions - 1; z <= farViewDistanceInRegions + 1; z++)
+        //     {
+        //         var thisRegionX = playerRegionCoord.X + x;
+        //         var thisRegionZ = playerRegionCoord.Z + z;
+        //         result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
+        //     }
+        // }
         return result;
     }
 

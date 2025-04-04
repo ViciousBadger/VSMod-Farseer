@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.Server;
 
 namespace Farseer;
 
@@ -30,7 +32,7 @@ public class FarRegionGen
     private ModSystem modSystem;
     private ICoreServerAPI sapi;
 
-    private Queue<InProgressRegion> regionGenerationQueue = new();
+    private List<InProgressRegion> regionGenerationQueue = new();
 
     public event FarRegionGeneratedDelegate FarRegionGenerated;
 
@@ -38,6 +40,8 @@ public class FarRegionGen
     {
         this.modSystem = modSystem;
         this.sapi = sapi;
+        sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
+        sapi.Event.RegisterGameTickListener((_) => KickstartChunkGen(), 500);
     }
 
     public void StartGeneratingRegion(long regionIdx)
@@ -49,7 +53,7 @@ public class FarRegionGen
         var chunkStartX = regionPos.X * chunksInRegion;
         var chunkStartZ = regionPos.Z * chunksInRegion;
 
-        int gridSize = 32;
+        int gridSize = 64;
         var newInProgressRegion = new InProgressRegion(regionIdx, gridSize);
 
         // First, populate already loaded chunks
@@ -62,7 +66,11 @@ public class FarRegionGen
 
                 if (sapi.WorldManager.GetMapChunk(targetChunkX, targetChunkZ) is IMapChunk mapChunk)
                 {
-                    PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
+                    // Must be at least though the vegetation pass to have a heightmap
+                    if (mapChunk.CurrentPass >= EnumWorldGenPass.Vegetation)
+                    {
+                        PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
+                    }
                 }
             }
         }
@@ -76,14 +84,71 @@ public class FarRegionGen
         else
         {
             modSystem.Mod.Logger.Notification("region {0} is unfinished and has been queued!", regionIdx);
-            regionGenerationQueue.Enqueue(newInProgressRegion);
+            regionGenerationQueue.Add(newInProgressRegion);
         }
     }
+
+    private void KickstartChunkGen()
+    {
+        var chunkQueueLimit = 800; // Leave space for vanilla chunk gen..
+        var chunksInRegionSquared = (sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize) * (sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize);
+
+        var regionsToPushToQueue = GameMath.Clamp((chunkQueueLimit - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionSquared, 0, regionGenerationQueue.Count);
+
+        for (var i = 0; i < regionsToPushToQueue; i++)
+        {
+            var inProgressRegion = regionGenerationQueue[i];
+
+            var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
+            var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(inProgressRegion.RegionIdx);
+            var chunkStartX = regionPos.X * chunksInRegion;
+            var chunkStartZ = regionPos.Z * chunksInRegion;
+
+            for (int z = 0; z < chunksInRegion; z++)
+            {
+                for (int x = 0; x < chunksInRegion; x++)
+                {
+                    int targetChunkX = chunkStartX + x;
+                    int targetChunkZ = chunkStartZ + z;
+
+                    sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                }
+            }
+            modSystem.Mod.Logger.Notification("chunk gen kickstart!!! for region {0}", inProgressRegion.RegionIdx);
+        }
+    }
+
+    private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
+    {
+        var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
+        var regionOfChunkX = chunkCoord.X / chunksInRegion;
+        var regionOfChunkZ = chunkCoord.Y / chunksInRegion;
+        var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
+
+        // TODO: if there is no in-progress region here, we should probably
+        // create one and keep it around. Or maybe not.. who knows (the queue
+        // can get very large as it is, when players move around..)
+
+        var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
+        if (inProgressRegion != null)
+        {
+            PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
+
+            if (IsRegionFullyPopulated(inProgressRegion))
+            {
+                modSystem.Mod.Logger.Notification("region {0} is done because all its chunks were loaded after enqueuing!!", inProgressRegion.RegionIdx);
+
+                FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
+                regionGenerationQueue.Remove(inProgressRegion);
+            }
+        }
+    }
+
 
     private bool IsRegionFullyPopulated(InProgressRegion region)
     {
         var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
-        return region.FinishedChunks.Count >= chunksInRegion;
+        return region.FinishedChunks.Count >= chunksInRegion * chunksInRegion;
     }
 
     private void PopulateRegionFromChunk(InProgressRegion region, int chunkX, int chunkZ, IMapChunk chunk)
@@ -111,15 +176,19 @@ public class FarRegionGen
                     int posInChunkX = offsetBlockPosX % sapi.WorldManager.ChunkSize;
                     int posInChunkZ = offsetBlockPosZ % sapi.WorldManager.ChunkSize;
 
-                    int toHeightmapCoord = posInChunkZ * sapi.WorldManager.ChunkSize + posInChunkX;
-                    region.Heightmap.Points[z * gridSize + x] = chunk.WorldGenTerrainHeightMap[toHeightmapCoord];
+                    int chunkHeightmapCoord = posInChunkZ * sapi.WorldManager.ChunkSize + posInChunkX;
+
+                    var sampledHeight = chunk.WorldGenTerrainHeightMap[chunkHeightmapCoord];
+                    var sampledHeightOrSea = GameMath.Max(sampledHeight, sapi.World.SeaLevel);
+                    region.Heightmap.Points[z * gridSize + x] = sampledHeightOrSea;
+                    // modSystem.Mod.Logger.Notification("height {0}", sampledHeight);
                 }
             }
         }
 
         region.FinishedChunks.Add(sapi.WorldManager.MapChunkIndex2D(chunkX, chunkZ));
 
-        modSystem.Mod.Logger.Notification("populated region from chunk X {0} Z {1}", chunkX, chunkZ);
+        //modSystem.Mod.Logger.Notification("populated region from chunk X {0} Z {1}", chunkX, chunkZ);
     }
 
     public FarRegionHeightmap GenerateRegionTest(long regionIdx)
