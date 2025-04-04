@@ -7,7 +7,7 @@ using Vintagestory.API.Server;
 
 namespace Farseer;
 
-public delegate void RegionReadyDelegate(long regionIdx, FarRegionData data);
+public delegate void RegionReadyDelegate(FarRegionData regionData);
 
 public class FarRegionProvider : IDisposable
 {
@@ -42,26 +42,26 @@ public class FarRegionProvider : IDisposable
 
     public void LoadRegion(long regionIdx)
     {
-        if (inMemoryRegionCache.TryGetValue(regionIdx, out FarRegionData data))
+        if (inMemoryRegionCache.TryGetValue(regionIdx, out FarRegionData regionDataFromCache))
         {
-            RegionReady?.Invoke(regionIdx, data);
+            RegionReady?.Invoke(regionDataFromCache);
         }
         else
         {
             if (db.GetRegionHeightmap(regionIdx) is FarRegionHeightmap heightmap)
             {
-                var regionDataObject = CreateDataObject(regionIdx, heightmap);
-                inMemoryRegionCache.Add(regionIdx, regionDataObject);
-                RegionReady?.Invoke(regionIdx, regionDataObject);
+                var regionDataFromDB = CreateDataObject(regionIdx, heightmap);
+                inMemoryRegionCache.Add(regionIdx, regionDataFromDB);
+                RegionReady?.Invoke(regionDataFromDB);
             }
             else
             {
-                var newRegion = generator.GenerateRegion(regionIdx);
+                var newRegionHeightmap = generator.GenerateRegion(regionIdx);
 
-                db.InsertRegionHeightmap(regionIdx, newRegion);
-                var regionDataObject = CreateDataObject(regionIdx, newRegion);
-                inMemoryRegionCache.Add(regionIdx, regionDataObject);
-                RegionReady?.Invoke(regionIdx, regionDataObject);
+                db.InsertRegionHeightmap(regionIdx, newRegionHeightmap);
+                var newRegionData = CreateDataObject(regionIdx, newRegionHeightmap);
+                inMemoryRegionCache.Add(regionIdx, newRegionData);
+                RegionReady?.Invoke(newRegionData);
             }
         }
     }
