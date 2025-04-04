@@ -14,14 +14,14 @@ public class FarseerClient : IDisposable
 
     FarRegionRenderer renderer;
 
-    int farRenderDistance = 3072;
+    int farViewDistance = 4096;
 
     public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {
         this.modSystem = mod;
         this.capi = api;
 
-        this.renderer = new FarRegionRenderer(api, farRenderDistance);
+        this.renderer = new FarRegionRenderer(api, farViewDistance);
 
         capi.Event.LevelFinalize += Init;
 
@@ -48,7 +48,7 @@ public class FarseerClient : IDisposable
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SendPacket(new FarEnableRequest
         {
-            FarViewDistance = farRenderDistance,
+            FarViewDistance = farViewDistance,
         });
     }
 

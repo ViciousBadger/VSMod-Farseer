@@ -41,11 +41,12 @@ public class FarseerServer : IDisposable
     {
         if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
         {
-            player.FarViewDistance = 2048;
+            // Just update view distance
+            player.FarViewDistance = request.FarViewDistance;
         }
         else
         {
-            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, FarViewDistance = request.FarViewDistance = 2048 });
+            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, FarViewDistance = request.FarViewDistance });
         }
         modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
     }
@@ -133,16 +134,19 @@ public class FarseerServer : IDisposable
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
         // modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
 
-        int farViewDistanceInRegions = player.FarViewDistance / sapi.WorldManager.RegionSize;
+        int farViewDistanceInRegions = (player.FarViewDistance / sapi.WorldManager.RegionSize);
 
         var result = new HashSet<long>();
 
         var walker = new SpiralWalker(new Coord2D(), farViewDistanceInRegions);
         foreach (var coord in walker)
         {
-            var thisRegionX = playerRegionCoord.X + coord.X;
-            var thisRegionZ = playerRegionCoord.Z + coord.Z;
-            result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
+            if (coord.Len() <= farViewDistanceInRegions)
+            {
+                var thisRegionX = playerRegionCoord.X + coord.X;
+                var thisRegionZ = playerRegionCoord.Z + coord.Z;
+                result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
+            }
         }
 
         // for (var x = -farViewDistanceInRegions - 1; x <= farViewDistanceInRegions + 1; x++)

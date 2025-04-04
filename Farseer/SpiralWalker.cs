@@ -1,9 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
+using Vintagestory.API.MathTools;
 
 namespace Farseer;
 
-public readonly record struct Coord2D(int X, int Z);
+public readonly record struct Coord2D(int X, int Z)
+{
+    public float Len()
+    {
+        return GameMath.Sqrt(X * X + Z * Z);
+    }
+}
 
 public sealed class SpiralWalker : IEnumerable<Coord2D>, IEnumerator<Coord2D>
 {

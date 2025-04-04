@@ -24,8 +24,7 @@ void main()
     color = mix(horizonColorNight, horizonColorDay, dayLight);
     color *= fogColor;
 
-    // Fade in near the player render distance
-    color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, 0.0, 1.0);
+    // color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, 0.0, 1.0);
 
     // Fade by distance using color (to avoid transparency weirdness)
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);
@@ -33,6 +32,18 @@ void main()
 
     // Fade out near the *far* render distance
     color.a *= clamp(20 * (1.1 - length(worldPos.xz) / farViewDistance) - 5, 0.0, 1.0);
+
+    float chunk_a = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), -1, 1);
+
+    if (chunk_a > 0.9) {
+        color.a = 0.0;
+    }
+
+
+    // Cut completely at near render distance
+    // if (length(worldPos.xz) < viewDistance * 0.8) {
+    //     color.a = 0.0;
+    // }
 
     vec4 camPos = viewMatrix * worldPos;
 

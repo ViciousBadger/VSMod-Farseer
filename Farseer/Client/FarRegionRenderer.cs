@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
+using Vintagestory.Client.NoObf;
 
 namespace Farseer;
 
@@ -160,6 +161,11 @@ public class FarRegionRenderer : IRenderer
         var horizonColorDay = new Vec4f(0.525f, 0.620f, 0.776f, 1.0f);
         var horizonColorNight = new Vec4f(0.114f, 0.149f, 0.255f, 1.0f);
 
+        //rapi.Set3DProjection(farViewDistance, capi.Settings.Float.Get("fieldOfView"));
+
+        var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
+        rapi.Set3DProjection(farViewDistance, fov);
+
         foreach (var regionModel in activeRegionModels.Values)
         {
             prog.Use();
@@ -184,5 +190,6 @@ public class FarRegionRenderer : IRenderer
 
             prog.Stop();
         }
+        rapi.Reset3DProjection();
     }
 }

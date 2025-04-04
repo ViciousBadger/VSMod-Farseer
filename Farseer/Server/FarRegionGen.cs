@@ -66,11 +66,7 @@ public class FarRegionGen
 
                 if (sapi.WorldManager.GetMapChunk(targetChunkX, targetChunkZ) is IMapChunk mapChunk)
                 {
-                    // Must be at least though the vegetation pass to have a heightmap
-                    if (mapChunk.CurrentPass >= EnumWorldGenPass.Vegetation)
-                    {
-                        PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
-                    }
+                    PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
                 }
             }
         }
@@ -90,10 +86,14 @@ public class FarRegionGen
 
     private void KickstartChunkGen()
     {
-        var chunkQueueLimit = 800; // Leave space for vanilla chunk gen..
+        int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * 0.5f); // Leave space for vanilla chunk gen..
         var chunksInRegionSquared = (sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize) * (sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize);
 
         var regionsToPushToQueue = GameMath.Clamp((chunkQueueLimit - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionSquared, 0, regionGenerationQueue.Count);
+
+        // modSystem.Mod.Logger.Notification("chunk queue limit {0}, current count {1}, chunks sq {2}", chunkQueueLimit, sapi.WorldManager.CurrentGeneratingChunkCount, chunksInRegionSquared);
+        //
+        // modSystem.Mod.Logger.Notification(".. so pushing {0} regions as we have {1} in total", regionsToPushToQueue, regionGenerationQueue.Count);
 
         for (var i = 0; i < regionsToPushToQueue; i++)
         {
