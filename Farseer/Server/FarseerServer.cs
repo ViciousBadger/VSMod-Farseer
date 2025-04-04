@@ -11,13 +11,13 @@ public class FarseerServer : IDisposable
     public class FarseePlayer
     {
         public int FarViewDistance { get; set; }
-        public HashSet<long> LoadedRegionsForPlayer { get; set; } = new HashSet<long>();
+        public HashSet<long> RegionsInView { get; set; } = new();
     }
 
     ModSystem modSystem;
     ICoreServerAPI sapi;
 
-    FarRegionAccess regionAccess;
+    FarRegionProvider regionProvider;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarsee = new Dictionary<IServerPlayer, FarseePlayer>();
 
     Dictionary<long, FarRegionData> regionDataCache = new Dictionary<long, FarRegionData>();
@@ -26,21 +26,22 @@ public class FarseerServer : IDisposable
     {
         this.modSystem = mod;
         this.sapi = sapi;
-        this.regionAccess = new FarRegionAccess(modSystem, sapi);
+        this.regionProvider = new FarRegionProvider(modSystem, sapi);
 
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
-        sapi.Event.RegisterGameTickListener(OnGameTick, 1000);
+        sapi.Event.RegisterGameTickListener((_) => UpdateLoadedRegions(), 1000);
+        sapi.Event.RegisterGameTickListener((_) => PruneUnusedRegions(), 1000 * 10, 1000);
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
     }
 
-    private void OnGameTick(float time)
+    private void UpdateLoadedRegions()
     {
         foreach (var player in playersWithFarsee)
         {
             var regionsInViewNow = GetRegionsInViewOfPlayer(player.Key, player.Value);
-            var regionsInViewBefore = player.Value.LoadedRegionsForPlayer;
+            var regionsInViewBefore = player.Value.RegionsInView;
 
             var newRegions = GetRegionsNewInView(regionsInViewBefore, regionsInViewNow);
             foreach (var newRegion in newRegions)
@@ -54,11 +55,8 @@ public class FarseerServer : IDisposable
                 UnloadRegionForPlayer(player.Key, lostRegion);
             }
 
-            player.Value.LoadedRegionsForPlayer = regionsInViewNow;
+            player.Value.RegionsInView = regionsInViewNow;
         }
-
-        DropUnusedRegions();
-
     }
 
     private void LoadRegionForPlayer(IServerPlayer serverPlayer, long regionIdx)
@@ -71,7 +69,7 @@ public class FarseerServer : IDisposable
         }
         else
         {
-            var newlyLoadedData = regionAccess.GetOrGenerateRegion(regionIdx);
+            var newlyLoadedData = regionProvider.GetOrGenerateRegion(regionIdx);
             regionDataCache.Add(regionIdx, newlyLoadedData);
             channel.SendPacket(newlyLoadedData, serverPlayer);
             modSystem.Mod.Logger.Notification("region {0} loaded for player {1} (was accessed)", regionIdx, serverPlayer.PlayerName);
@@ -86,22 +84,18 @@ public class FarseerServer : IDisposable
         modSystem.Mod.Logger.Notification("region {0} unloaded for player {1}", regionIdx, serverPlayer.PlayerName);
     }
 
-    private void DropUnusedRegions()
+    private void PruneUnusedRegions()
     {
-        var regionsToUnload = new List<long>();
-        foreach (var regionIdx in regionDataCache.Keys)
+        var regionsToKeep = new HashSet<long>();
+
+        foreach (var playerData in playersWithFarsee.Values)
         {
-            if (playersWithFarsee.Values.All(playerData => !playerData.LoadedRegionsForPlayer.Contains(regionIdx)))
+            foreach (var regionIdx in playerData.RegionsInView)
             {
-                regionsToUnload.Add(regionIdx);
+                regionsToKeep.Add(regionIdx);
             }
         }
-
-        foreach (var regionIdx in regionsToUnload)
-        {
-            regionDataCache.Remove(regionIdx);
-            modSystem.Mod.Logger.Notification("region {0} dropped as no players are in range", regionIdx);
-        }
+        regionProvider.PruneRegionCache(regionsToKeep);
     }
 
     private HashSet<long> GetRegionsNewInView(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow)
@@ -159,6 +153,6 @@ public class FarseerServer : IDisposable
 
     public void Dispose()
     {
-        this.regionAccess?.Dispose();
+        this.regionProvider?.Dispose();
     }
 }

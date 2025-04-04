@@ -5,9 +5,9 @@ using Microsoft.Data.Sqlite;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
-public class FarDB : SQLiteDBConnection
+public class FarRegionDB : SQLiteDBConnection
 {
-    public FarDB(ILogger logger) : base(logger)
+    public FarRegionDB(ILogger logger) : base(logger)
     {
     }
 

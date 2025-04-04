@@ -14,19 +14,14 @@ public class FarseerClient : IDisposable
 
     FarRegionRenderer renderer;
 
-    FarChunkMap map;
-
     int farRenderDistance = 3072;
 
     public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {
         this.modSystem = mod;
         this.capi = api;
-        this.map = new FarChunkMap();
 
         this.renderer = new FarRegionRenderer(api, farRenderDistance);
-        // this.renderer = new FarChunkRenderer(api, map);
-        // channel.SetMessageHandler<FarChunkMessage>(OnRecieveFarChunkMessage);
 
         capi.Event.LevelFinalize += Init;
 
@@ -55,11 +50,6 @@ public class FarseerClient : IDisposable
         {
             FarViewDistance = farRenderDistance,
         });
-    }
-
-    void OnRecieveFarChunkMessage(FarChunkMessage msg)
-    {
-        map.LoadFromMessage(msg);
     }
 
     public void Dispose()

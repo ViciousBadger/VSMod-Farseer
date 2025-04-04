@@ -6,14 +6,14 @@ namespace Farseer;
 
 public delegate void FarRegionGeneratedDelegate(long regionIdx, FarRegionHeightmap generatedHeightmap);
 
-public class FarGen
+public class FarRegionGen
 {
     private ModSystem modSystem;
     private ICoreServerAPI sapi;
 
     // public event FarRegionGeneratedDelegate FarRegionGenerated;
 
-    public FarGen(ModSystem modSystem, ICoreServerAPI sapi)
+    public FarRegionGen(ModSystem modSystem, ICoreServerAPI sapi)
     {
         this.modSystem = modSystem;
         this.sapi = sapi;
