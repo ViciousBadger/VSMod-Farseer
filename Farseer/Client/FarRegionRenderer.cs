@@ -155,7 +155,10 @@ public class FarRegionRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
+
         var rapi = capi.Render;
+        if (rapi.FrameWidth == 0) return;
+
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
 
         var horizonColorDay = new Vec4f(0.525f, 0.620f, 0.776f, 1.0f);
@@ -168,6 +171,7 @@ public class FarRegionRenderer : IRenderer
 
         foreach (var regionModel in activeRegionModels.Values)
         {
+
             prog.Use();
 
             modelMat.Identity()
@@ -180,8 +184,17 @@ public class FarRegionRenderer : IRenderer
 
             prog.Uniform("horizonColorDay", horizonColorDay);
             prog.Uniform("horizonColorNight", horizonColorNight);
-            prog.Uniform("fogColor", capi.Ambient.BlendedFogColor);
+
+            prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
+            prog.Uniform("sunColor", capi.World.Calendar.SunColor);
             prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength * 0.95f));
+
+            prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
+            prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
+            prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
+            prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
+            prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
+
             prog.Uniform("viewDistance", (float)capi.World.Player.WorldData.DesiredViewDistance);
             prog.Uniform("farViewDistance", (float)this.farViewDistance);
 
