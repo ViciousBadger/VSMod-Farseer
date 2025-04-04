@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -8,10 +10,29 @@ public delegate void FarRegionGeneratedDelegate(long regionIdx, FarRegionHeightm
 
 public class FarRegionGen
 {
+    class InProgressRegion
+    {
+        public long RegionIdx { get; }
+        public FarRegionHeightmap Heightmap { get; }
+        public HashSet<long> FinishedChunks { get; } = new();
+
+        public InProgressRegion(long regionIdx, int gridSize)
+        {
+            RegionIdx = regionIdx;
+            Heightmap = new FarRegionHeightmap
+            {
+                GridSize = gridSize,
+                Points = new int[gridSize * gridSize],
+            };
+        }
+    }
+
     private ModSystem modSystem;
     private ICoreServerAPI sapi;
 
-    // public event FarRegionGeneratedDelegate FarRegionGenerated;
+    private Queue<InProgressRegion> regionGenerationQueue = new();
+
+    public event FarRegionGeneratedDelegate FarRegionGenerated;
 
     public FarRegionGen(ModSystem modSystem, ICoreServerAPI sapi)
     {
@@ -19,7 +40,89 @@ public class FarRegionGen
         this.sapi = sapi;
     }
 
-    public FarRegionHeightmap GenerateRegion(long regionIdx)
+    public void StartGeneratingRegion(long regionIdx)
+    {
+        if (regionGenerationQueue.Any(r => r.RegionIdx == regionIdx)) return;
+
+        var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
+        var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
+        var chunkStartX = regionPos.X * chunksInRegion;
+        var chunkStartZ = regionPos.Z * chunksInRegion;
+
+        int gridSize = 32;
+        var newInProgressRegion = new InProgressRegion(regionIdx, gridSize);
+
+        // First, populate already loaded chunks
+        for (int z = 0; z < chunksInRegion; z++)
+        {
+            for (int x = 0; x < chunksInRegion; x++)
+            {
+                int targetChunkX = chunkStartX + x;
+                int targetChunkZ = chunkStartZ + z;
+
+                if (sapi.WorldManager.GetMapChunk(targetChunkX, targetChunkZ) is IMapChunk mapChunk)
+                {
+                    PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
+                }
+            }
+        }
+
+        if (IsRegionFullyPopulated(newInProgressRegion))
+        {
+            //No need to enqueue if it's already done.
+            modSystem.Mod.Logger.Notification("region {0} was already done because all its chunks are loaded!", regionIdx);
+            FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
+        }
+        else
+        {
+            modSystem.Mod.Logger.Notification("region {0} is unfinished and has been queued!", regionIdx);
+            regionGenerationQueue.Enqueue(newInProgressRegion);
+        }
+    }
+
+    private bool IsRegionFullyPopulated(InProgressRegion region)
+    {
+        var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
+        return region.FinishedChunks.Count >= chunksInRegion;
+    }
+
+    private void PopulateRegionFromChunk(InProgressRegion region, int chunkX, int chunkZ, IMapChunk chunk)
+    {
+        var chunksInRegion = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
+        var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(region.RegionIdx);
+        var chunkStartX = regionPos.X * chunksInRegion;
+        var chunkStartZ = regionPos.Z * chunksInRegion;
+
+        int gridSize = region.Heightmap.GridSize;
+        float cellSize = sapi.WorldManager.RegionSize / (float)gridSize;
+
+        for (int z = 0; z < gridSize; z++)
+        {
+            for (int x = 0; x < gridSize; x++)
+            {
+                int offsetBlockPosX = (int)(x * cellSize);
+                int offsetBlockPosZ = (int)(z * cellSize);
+
+                int targetChunkX = chunkStartX + offsetBlockPosX / sapi.WorldManager.ChunkSize;
+                int targetChunkZ = chunkStartZ + offsetBlockPosZ / sapi.WorldManager.ChunkSize;
+
+                if (targetChunkX == chunkX && targetChunkZ == chunkZ)
+                {
+                    int posInChunkX = offsetBlockPosX % sapi.WorldManager.ChunkSize;
+                    int posInChunkZ = offsetBlockPosZ % sapi.WorldManager.ChunkSize;
+
+                    int toHeightmapCoord = posInChunkZ * sapi.WorldManager.ChunkSize + posInChunkX;
+                    region.Heightmap.Points[z * gridSize + x] = chunk.WorldGenTerrainHeightMap[toHeightmapCoord];
+                }
+            }
+        }
+
+        region.FinishedChunks.Add(sapi.WorldManager.MapChunkIndex2D(chunkX, chunkZ));
+
+        modSystem.Mod.Logger.Notification("populated region from chunk X {0} Z {1}", chunkX, chunkZ);
+    }
+
+    public FarRegionHeightmap GenerateRegionTest(long regionIdx)
     {
         //sapi.WorldManager.LoadChunkColumn(0, 0);
         //modSystem.Mod.Logger.Notification("ok, generating 0,0");

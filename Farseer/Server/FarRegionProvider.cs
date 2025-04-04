@@ -36,8 +36,7 @@ public class FarRegionProvider : IDisposable
         }
 
         this.generator = new FarRegionGen(modSystem, sapi);
-
-        this.generator.GenerateRegion(0);
+        generator.FarRegionGenerated += OnFarRegionGenerated;
     }
 
     public void LoadRegion(long regionIdx)
@@ -56,15 +55,26 @@ public class FarRegionProvider : IDisposable
             }
             else
             {
-                var newRegionHeightmap = generator.GenerateRegion(regionIdx);
+                generator.StartGeneratingRegion(regionIdx);
 
-                db.InsertRegionHeightmap(regionIdx, newRegionHeightmap);
-                var newRegionData = CreateDataObject(regionIdx, newRegionHeightmap);
-                inMemoryRegionCache.Add(regionIdx, newRegionData);
-                RegionReady?.Invoke(newRegionData);
+                // var newRegionHeightmap = generator.GenerateRegion(regionIdx);
+                //
+                // db.InsertRegionHeightmap(regionIdx, newRegionHeightmap);
+                // var newRegionData = CreateDataObject(regionIdx, newRegionHeightmap);
+                // inMemoryRegionCache.Add(regionIdx, newRegionData);
+                // RegionReady?.Invoke(newRegionData);
             }
         }
     }
+
+    private void OnFarRegionGenerated(long regionIdx, FarRegionHeightmap generatedHeightmap)
+    {
+        // db.InsertRegionHeightmap(regionIdx, generatedHeightmap);
+        var newRegionData = CreateDataObject(regionIdx, generatedHeightmap);
+        inMemoryRegionCache.Add(regionIdx, newRegionData);
+        RegionReady?.Invoke(newRegionData);
+    }
+
 
     public void PruneRegionCache(HashSet<long> regionsToKeep)
     {
@@ -81,21 +91,6 @@ public class FarRegionProvider : IDisposable
         {
             inMemoryRegionCache.Remove(regionIdx);
             modSystem.Mod.Logger.Notification("region {0} dropped as no players are in range", regionIdx);
-        }
-    }
-
-    public FarRegionData GetOrGenerateRegion(long regionIdx)
-    {
-        var storedRegion = db.GetRegionHeightmap(regionIdx);
-        if (storedRegion != null)
-        {
-            return CreateDataObject(regionIdx, storedRegion);
-        }
-        else
-        {
-            var newRegion = generator.GenerateRegion(regionIdx);
-            db.InsertRegionHeightmap(regionIdx, newRegion);
-            return CreateDataObject(regionIdx, newRegion);
         }
     }
 
