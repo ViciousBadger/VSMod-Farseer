@@ -79,7 +79,7 @@ public class FarRegionGen
         {
             //No need to enqueue if all if the region chunks were already loaded!
             FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
-            modSystem.Mod.Logger.Notification("{0} was pre-cooked for us :o", newInProgressRegion.RegionIdx);
+            // modSystem.Mod.Logger.Notification("{0} was pre-cooked for us :o", newInProgressRegion.RegionIdx);
         }
         else
         {
@@ -150,7 +150,7 @@ public class FarRegionGen
 
             if (IsRegionFullyPopulated(inProgressRegion))
             {
-                modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
+                // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
                 FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
                 regionGenerationQueue.Remove(inProgressRegion);
 
