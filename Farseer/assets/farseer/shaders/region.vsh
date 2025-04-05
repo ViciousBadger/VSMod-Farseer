@@ -37,9 +37,9 @@ void main()
 
     // "Fade" into sky color by distance
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);
-    vec4 color = vec4(mainColor * dayLight - 0.15, clamp(1.0 - distFade, 0.0, 1.0));
+    vec4 color = vec4(mainColor * dayLight * dayLight, clamp(1.0 - distFade, 0.0, 1.0));
     //vec4 color = vec4(mainColor * dayLight - 0.1, 1.0);
-    color.rgb += distFade * 0.2 * dayLight;
+    color.rgb += -0.35 + distFade * 0.22 * dayLight;
 
     // Fade out near the *far* render distance
     color.a *= clamp(20 * (1.1 - length(worldPos.xz) / farViewDistance) - 5, 0.0, 1.0);
