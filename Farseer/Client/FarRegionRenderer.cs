@@ -20,8 +20,8 @@ public class FarRegionRenderer : IRenderer
 
     public int RenderRange => 9999;
 
+    private FarseerModSystem modSystem;
     private ICoreClientAPI capi;
-    private int farViewDistance;
     private Dictionary<long, PerModelData> activeRegionModels = new Dictionary<long, PerModelData>();
 
     private Matrixf modelMat = new Matrixf();
@@ -30,10 +30,10 @@ public class FarRegionRenderer : IRenderer
 
     private Vec3f mainColor;
 
-    public FarRegionRenderer(ICoreClientAPI capi, int farViewDistance)
+    public FarRegionRenderer(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
+        this.modSystem = modSystem;
         this.capi = capi;
-        this.farViewDistance = farViewDistance;
 
         capi.Event.ReloadShader += LoadShader;
         LoadShader();
@@ -215,6 +215,7 @@ public class FarRegionRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
+        var farViewDistance = modSystem.Client.Config.FarViewDistance;
 
         var rapi = capi.Render;
         if (rapi.FrameWidth == 0) return;
@@ -251,17 +252,17 @@ public class FarRegionRenderer : IRenderer
 
             prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
             prog.Uniform("sunColor", capi.World.Calendar.SunColor);
-            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength));
+            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.SunLightStrength));
 
             prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
             prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
             prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
             prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
-            prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
-            prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
+            //prog.Uniform("flatFogDensity", 0.0f);
+            //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
 
             prog.Uniform("viewDistance", viewDistance);
-            prog.Uniform("farViewDistance", (float)this.farViewDistance);
+            prog.Uniform("farViewDistance", (float)farViewDistance);
 
             rapi.RenderMesh(regionModel.MeshRef);
 

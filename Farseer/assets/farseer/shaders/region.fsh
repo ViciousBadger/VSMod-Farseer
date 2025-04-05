@@ -35,7 +35,7 @@ void main()
     // Apply sky glow, similarly to with clouds, because the distant atmosphere
     // should be colored by sun
     float sealevelOffsetFactor = 0.25;
-    vec4 skyGlow = getSkyGlowAt(worldPosf, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, 0.7);
+    vec4 skyGlow = getSkyGlowAt(vec3(worldPosf.x, worldPosf.y+100,worldPosf.z), sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, 0.7);
 
     outColor.rgb *= mix(vec3(1), 1.2 * skyGlow.rgb, skyGlow.a);
     outColor.rgb *= max(1, 0.9 + skyGlow.a/10);

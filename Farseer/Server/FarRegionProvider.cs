@@ -13,14 +13,14 @@ public class FarRegionProvider : IDisposable
 {
     public event RegionReadyDelegate RegionReady;
 
-    private ModSystem modSystem;
+    private FarseerModSystem modSystem;
     private ICoreServerAPI sapi;
 
     private readonly Dictionary<long, FarRegionData> inMemoryRegionCache = new();
     private FarRegionDB db;
     private FarRegionGen generator;
 
-    public FarRegionProvider(ModSystem modSystem, ICoreServerAPI sapi)
+    public FarRegionProvider(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
         this.modSystem = modSystem;
         this.sapi = sapi;
@@ -83,8 +83,10 @@ public class FarRegionProvider : IDisposable
         foreach (var regionIdx in toRemove)
         {
             inMemoryRegionCache.Remove(regionIdx);
-            generator.CancelGeneratingRegionIfInQueue(regionIdx);
         }
+
+        generator.CancelTasksNotIn(regionsToKeep);
+
     }
 
     private string GetDbFilePath()

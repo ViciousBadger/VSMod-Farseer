@@ -11,22 +11,25 @@ public class FarseerServer : IDisposable
     public class FarseePlayer
     {
         public IServerPlayer ServerPlayer { get; set; }
-        public int FarViewDistance { get; set; }
+        public FarseerClientConfig ClientConfig { get; set; }
         public HashSet<long> RegionsInView { get; set; } = new();
         public HashSet<long> RegionsLoaded { get; set; } = new();
     }
 
-    ModSystem modSystem;
+    FarseerModSystem modSystem;
     ICoreServerAPI sapi;
+    FarseerServerConfig config;
 
     FarRegionProvider regionProvider;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarsee = new Dictionary<IServerPlayer, FarseePlayer>();
 
-    public FarseerServer(ModSystem mod, ICoreServerAPI sapi)
+    public FarseerServerConfig Config => config;
+
+    public FarseerServer(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
-        this.modSystem = mod;
+        this.modSystem = modSystem;
         this.sapi = sapi;
-        this.regionProvider = new FarRegionProvider(modSystem, sapi);
+        this.regionProvider = new FarRegionProvider(this.modSystem, sapi);
         regionProvider.RegionReady += TryLoadRegionForPlayersInView;
 
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
@@ -35,20 +38,37 @@ public class FarseerServer : IDisposable
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
+
+        try
+        {
+            config = sapi.LoadModConfig<FarseerServerConfig>("farseer-server.json");
+            if (config == null)
+            {
+                config = new FarseerServerConfig();
+            }
+            sapi.StoreModConfig<FarseerServerConfig>(config, "farseer-server.json");
+        }
+        catch (Exception e)
+        {
+            //Couldn't load the mod config... Create a new one with default settings, but don't save it.
+            this.modSystem.Mod.Logger.Error("Could not load config! Loading default settings instead.");
+            this.modSystem.Mod.Logger.Error(e);
+            config = new FarseerServerConfig();
+        }
     }
 
     private void EnableFarseeForPlayer(IServerPlayer fromPlayer, FarEnableRequest request)
     {
         if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
         {
-            // Assume that the player changed their view distance. Should clear and re-send regions.
-            player.FarViewDistance = request.FarViewDistance;
+            // Assume that the player changed their config. Should clear and re-send regions.
+            player.ClientConfig = request.ClientConfig;
             player.RegionsInView.Clear();
             player.RegionsLoaded.Clear();
         }
         else
         {
-            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, FarViewDistance = request.FarViewDistance });
+            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, ClientConfig = request.ClientConfig });
         }
         modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
     }
@@ -135,7 +155,7 @@ public class FarseerServer : IDisposable
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
         // modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
 
-        int farViewDistanceInRegions = (player.FarViewDistance / sapi.WorldManager.RegionSize);
+        int farViewDistanceInRegions = (player.ClientConfig.FarViewDistance / sapi.WorldManager.RegionSize);
 
         var result = new HashSet<long>();
 
@@ -149,16 +169,6 @@ public class FarseerServer : IDisposable
                 result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
             }
         }
-
-        // for (var x = -farViewDistanceInRegions - 1; x <= farViewDistanceInRegions + 1; x++)
-        // {
-        //     for (var z = -farViewDistanceInRegions - 1; z <= farViewDistanceInRegions + 1; z++)
-        //     {
-        //         var thisRegionX = playerRegionCoord.X + x;
-        //         var thisRegionZ = playerRegionCoord.Z + z;
-        //         result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
-        //     }
-        // }
         return result;
     }
 

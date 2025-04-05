@@ -32,11 +32,8 @@ out float nightVisionStrengthv;
 
 void main()
 {
-
-
     vec4 worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
-
-    worldPos.xyz = applyPerceptionWarping(worldPos.xyz);
+    worldPos = applyGlobalWarping(worldPos);
 
     // "Fade" into sky color by distance
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);

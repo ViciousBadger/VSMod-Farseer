@@ -30,7 +30,7 @@ public class FarRegionGen
 
     public event FarRegionGeneratedDelegate FarRegionGenerated;
 
-    private ModSystem modSystem;
+    private FarseerModSystem modSystem;
     private ICoreServerAPI sapi;
 
     private List<InProgressRegion> regionGenerationQueue = new();
@@ -38,7 +38,7 @@ public class FarRegionGen
     private int chunksInRegionColumn;
     private int chunksInRegionArea;
 
-    public FarRegionGen(ModSystem modSystem, ICoreServerAPI sapi)
+    public FarRegionGen(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
         this.modSystem = modSystem;
         this.sapi = sapi;
@@ -57,7 +57,7 @@ public class FarRegionGen
         var chunkStartX = regionPos.X * chunksInRegionColumn;
         var chunkStartZ = regionPos.Z * chunksInRegionColumn;
 
-        int gridSize = 64;
+        int gridSize = modSystem.Server.Config.HeightmapGridSize;
         var newInProgressRegion = new InProgressRegion(regionIdx, gridSize);
 
         // First, populate already loaded chunks
@@ -79,6 +79,7 @@ public class FarRegionGen
         {
             //No need to enqueue if all if the region chunks were already loaded!
             FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
+            modSystem.Mod.Logger.Notification("{0} was pre-cooked for us :o", newInProgressRegion.RegionIdx);
         }
         else
         {
@@ -86,15 +87,23 @@ public class FarRegionGen
         }
     }
 
-    public void CancelGeneratingRegionIfInQueue(long regionIdx)
+    public void CancelTasksNotIn(HashSet<long> regionsToKeep)
     {
-        var regionsRemoved = regionGenerationQueue.RemoveAll(r => r.RegionIdx == regionIdx);
-        modSystem.Mod.Logger.Notification("{0} regions cancelled from worldgen", regionsRemoved);
+        var n = regionGenerationQueue.RemoveAll(r => !regionsToKeep.Contains(r.RegionIdx) && r.FinishedChunks.Count == 0);
+        //lol
+        if (n == 1)
+        {
+            modSystem.Mod.Logger.Notification("Cancelling {0} far generation task", n);
+        }
+        else if (n > 1)
+        {
+            modSystem.Mod.Logger.Notification("Cancelling {0} far generation tasks", n);
+        }
     }
 
     private void LoadNextFarChunksInQueue()
     {
-        int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * 0.5f); // Leave space for vanilla chunk gen..
+        int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * modSystem.Server.Config.ChunkQueueThreshold); // Leave space for vanilla chunk gen..
 
         var regionsToPushToQueue = GameMath.Clamp((chunkQueueLimit - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionArea, 0, regionGenerationQueue.Count);
 
@@ -123,7 +132,7 @@ public class FarRegionGen
 
         if (regionsToPushToQueue > 0)
         {
-            modSystem.Mod.Logger.Notification("Loading/generating chunks in {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
+            modSystem.Mod.Logger.Notification("Generating {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
         }
     }
 
@@ -141,8 +150,14 @@ public class FarRegionGen
 
             if (IsRegionFullyPopulated(inProgressRegion))
             {
+                modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
                 FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
                 regionGenerationQueue.Remove(inProgressRegion);
+
+                if (regionGenerationQueue.Count == 0)
+                {
+                    modSystem.Mod.Logger.Notification("All done!");
+                }
             }
         }
     }

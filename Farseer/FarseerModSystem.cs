@@ -9,6 +9,9 @@ public class FarseerModSystem : ModSystem
     FarseerServer server;
     FarseerClient client;
 
+    public FarseerServer Server => server;
+    public FarseerClient Client => client;
+
     public const string MOD_CHANNEL_NAME = "farseer";
 
     // Called on server and client

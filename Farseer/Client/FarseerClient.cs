@@ -6,31 +6,46 @@ namespace Farseer;
 
 public class FarseerClient : IDisposable
 {
-    ModSystem modSystem;
+    FarseerModSystem modSystem;
     ICoreClientAPI capi;
+    FarseerClientConfig config;
 
     FarRegionRenderer renderer;
 
-    int farViewDistance = 3000;
+    public FarseerClientConfig Config => config;
 
-    public FarseerClient(ModSystem mod, ICoreClientAPI api)
+    public FarseerClient(FarseerModSystem modSystem, ICoreClientAPI api)
     {
-        this.modSystem = mod;
+        this.modSystem = modSystem;
         this.capi = api;
-
-        this.renderer = new FarRegionRenderer(api, farViewDistance);
 
         capi.Event.LevelFinalize += Init;
 
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarRegionData>(OnRecieveFarRegionData);
         channel.SetMessageHandler<FarRegionUnload>(OnRecieveFarRegionUnload);
+
+        try
+        {
+            config = capi.LoadModConfig<FarseerClientConfig>("farseer-client.json");
+            if (config == null)
+            {
+                config = new FarseerClientConfig();
+            }
+            capi.StoreModConfig<FarseerClientConfig>(config, "farseer-client.json");
+        }
+        catch (Exception e)
+        {
+            this.modSystem.Mod.Logger.Error("Could not load config! Loading default settings instead.");
+            this.modSystem.Mod.Logger.Error(e);
+            config = new FarseerClientConfig();
+        }
+
+        this.renderer = new FarRegionRenderer(this.modSystem, api);
     }
 
     private void OnRecieveFarRegionData(FarRegionData data)
     {
-        //modSystem.Mod.Logger.Chat("New far data. Idx {0}, X {1}, Z {2}, Size {3}, Resolution {4}, Length {5}", data.RegionIndex, data.RegionX, data.RegionZ, data.RegionSize, data.Heightmap.GridSize, data.Heightmap.Points.Length);
-
         renderer.BuildRegion(data);
     }
 
@@ -45,7 +60,7 @@ public class FarseerClient : IDisposable
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SendPacket(new FarEnableRequest
         {
-            FarViewDistance = farViewDistance,
+            ClientConfig = config,
         });
     }
 

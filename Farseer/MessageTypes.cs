@@ -1,4 +1,3 @@
-
 using ProtoBuf;
 
 namespace Farseer;
@@ -7,7 +6,7 @@ namespace Farseer;
 public class FarEnableRequest
 {
     [ProtoMember(1)]
-    public int FarViewDistance = 2048;
+    public FarseerClientConfig ClientConfig;
 }
 
 [ProtoContract]
