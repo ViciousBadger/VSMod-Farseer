@@ -7,9 +7,7 @@ uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-uniform vec4 horizonColorDay; 
-uniform vec4 horizonColorNight; 
-
+uniform vec3 mainColor; 
 uniform vec3 sunColor; 
 uniform float dayLight; 
 
@@ -20,7 +18,7 @@ uniform float fogDensityIn;
 // uniform float viewDistance;
 uniform float farViewDistance;
 
-out vec3 vertexPos;
+out vec3 worldPosf;
 out vec4 rgbaMain;
 out vec4 rgbaFog;
 out float fogAmountf;
@@ -38,39 +36,22 @@ void main()
 
     worldPos.xyz = applyPerceptionWarping(worldPos.xyz);
 
-    vec4 color = mix(horizonColorNight, horizonColorDay, 0.5 + dayLight * 0.5);
-    color = color * dayLight;
-    //color *= fogColor;
-
-    // color.a *= 1.0 - clamp(20 * (1.2 - length(worldPos.xz) / viewDistance) - 5, 0.0, 1.0);
-
-    // Fade by distance using color (to avoid transparency weirdness)
+    // "Fade" into sky color by distance
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);
-    color.rgb += distFade * 0.1 * dayLight * clamp(1.0 - fogDensityIn, 0.0, 1.0);
+    vec4 color = vec4(mainColor * dayLight, clamp(1.0 - distFade, 0.0, 1.0));
 
-    // Fade out near the *far* render distance
-    color.a *= clamp(20 * (1.1 - length(worldPos.xz) / farViewDistance) - 5, 0.0, 1.0);
-
-    float chunk_a = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), -1, 1);
-
-    if (chunk_a > 0.9) {
-        color.a = 0.0;
-    }
+    // Subtract approximately alpha of chunks for smooth-ish fade
+    float chunk_a = clamp(18.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), -1, 1);
+    color.a = min(1.0 - chunk_a, color.a);
 
     float fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 
-    vertexPos = worldPos.xyz;
+    worldPosf = worldPos.xyz;
     rgbaMain = color;
     rgbaFog = rgbaFogIn;
     fogAmountf = clamp(fogAmount + clamp(1 - 4 * dayLight, -0.04, 1), 0, 1);
 	nightVisionStrengthv = nightVisionStrength;
 
-    // Cut completely at near render distance
-    // if (length(worldPos.xz) < viewDistance * 0.8) {
-    //     color.a = 0.0;
-    // }
-
     vec4 camPos = viewMatrix * worldPos;
-
     gl_Position = projectionMatrix * camPos;
 }

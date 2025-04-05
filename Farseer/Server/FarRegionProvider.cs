@@ -31,7 +31,7 @@ public class FarRegionProvider : IDisposable
         db.OpenOrCreate(path, ref errorMessage, true, true, false);
         if (errorMessage != null)
         {
-            // TODO: maybe just delete and re-create the entire database here.
+            // IDEA: maybe just delete and re-create the entire database here.
             throw new Exception(string.Format("Cannot open {0}, possibly corrupted. Please fix manually or delete this file to continue playing", path));
         }
 
@@ -56,13 +56,6 @@ public class FarRegionProvider : IDisposable
             else
             {
                 generator.StartGeneratingRegion(regionIdx);
-
-                // var newRegionHeightmap = generator.GenerateRegion(regionIdx);
-                //
-                // db.InsertRegionHeightmap(regionIdx, newRegionHeightmap);
-                // var newRegionData = CreateDataObject(regionIdx, newRegionHeightmap);
-                // inMemoryRegionCache.Add(regionIdx, newRegionData);
-                // RegionReady?.Invoke(newRegionData);
             }
         }
     }
@@ -90,7 +83,7 @@ public class FarRegionProvider : IDisposable
         foreach (var regionIdx in toRemove)
         {
             inMemoryRegionCache.Remove(regionIdx);
-            modSystem.Mod.Logger.Notification("region {0} dropped as no players are in range", regionIdx);
+            generator.CancelGeneratingRegionIfInQueue(regionIdx);
         }
     }
 
@@ -104,12 +97,14 @@ public class FarRegionProvider : IDisposable
     private FarRegionData CreateDataObject(long regionIdx, FarRegionHeightmap heightmap)
     {
         var regionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
+
         return new FarRegionData
         {
             RegionIndex = regionIdx,
             RegionX = regionCoord.X,
             RegionZ = regionCoord.Z,
             RegionSize = sapi.WorldManager.RegionSize,
+            RegionMapSize = sapi.WorldManager.MapSizeX / sapi.WorldManager.RegionSize,
             Heightmap = heightmap,
         };
     }

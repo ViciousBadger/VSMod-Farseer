@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
@@ -10,6 +11,7 @@ public class FarRegionRenderer : IRenderer
 {
     public struct PerModelData
     {
+        public FarRegionData SourceData { get; set; }
         public Vec3d Position { get; set; }
         public MeshRef MeshRef { get; set; }
     }
@@ -23,9 +25,10 @@ public class FarRegionRenderer : IRenderer
     private Dictionary<long, PerModelData> activeRegionModels = new Dictionary<long, PerModelData>();
 
     private Matrixf modelMat = new Matrixf();
+    private float[] projectionMat = Mat4f.Create();
     private IShaderProgram prog;
 
-    private EnumBlendMode blendMode = EnumBlendMode.Standard;
+    private Vec3f mainColor;
 
     public FarRegionRenderer(ICoreClientAPI capi, int farViewDistance)
     {
@@ -37,20 +40,17 @@ public class FarRegionRenderer : IRenderer
 
         capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
 
-        //capi.Event.KeyDown += Blendtest;
-    }
+        // From sky.png
+        mainColor = new Vec3f(0.525f, 0.620f, 0.776f);
 
-    private void Blendtest(KeyEvent e)
-    {
+        var farFog = new AmbientModifier().EnsurePopulated();
+        farFog.FogDensity = new WeightedFloat(0.005f, 1.0f);
+        farFog.FogMin = new WeightedFloat(0.0f, 1.0f);
+        farFog.FogColor = new WeightedFloatArray(new float[] {
+                mainColor.X,mainColor.Y,mainColor.Z
+            }, 1.0f);
 
-        if (e.KeyCode == 84) //b
-        {
-            EnumBlendMode[] values = (EnumBlendMode[])Enum.GetValues(typeof(EnumBlendMode));
-            int currentIndex = Array.IndexOf(values, blendMode);
-            int nextIndex = (currentIndex + 1) % values.Length;
-            blendMode = values[nextIndex];
-            capi.Logger.Notification(blendMode.ToString());
-        }
+        //capi.Ambient.CurrentModifiers.Add("farfog", farFog);
     }
 
     public bool LoadShader()
@@ -68,8 +68,20 @@ public class FarRegionRenderer : IRenderer
         return result;
     }
 
-    public void BuildRegion(FarRegionData sourceData)
+    private long RegionNeighbourIndex(long idx, int offsetX, int offsetZ, int regionMapSize)
     {
+        int rX = (int)(idx % regionMapSize);
+        int rZ = (int)(idx / regionMapSize);
+
+        return (long)(rZ + offsetZ) * (long)regionMapSize + (long)(rX + offsetX);
+    }
+
+    public void BuildRegion(FarRegionData sourceData, bool isRebuild = false)
+    {
+        // Find neighbour id's for stitching
+        var eastIdx = RegionNeighbourIndex(sourceData.RegionIndex, 1, 0, sourceData.RegionMapSize);
+        var southIdx = RegionNeighbourIndex(sourceData.RegionIndex, 0, 1, sourceData.RegionMapSize);
+        var southEastIdx = RegionNeighbourIndex(sourceData.RegionIndex, 1, 1, sourceData.RegionMapSize);
 
         var mesh = new MeshData(false);
 
@@ -85,16 +97,39 @@ public class FarRegionRenderer : IRenderer
         mesh.Indices = new int[indicesCount]; // 2 triangles per cell, 3 indices per triangle
 
         int xyz = 0;
-        for (int i = 0; i <= gridSize; i++)
+        for (int vZ = 0; vZ <= gridSize; vZ++)
         {
-            for (int j = 0; j <= gridSize; j++)
+            for (int vX = 0; vX <= gridSize; vX++)
             {
-                mesh.xyz[xyz++] = j * cellSize;
-                // For vertices at the edges, use nearest available height data
-                int hi = Math.Min(i, gridSize - 1);
-                int hj = Math.Min(j, gridSize - 1);
-                mesh.xyz[xyz++] = sourceData.Heightmap.Points[hi * gridSize + hj];
-                mesh.xyz[xyz++] = i * cellSize;
+                mesh.xyz[xyz++] = vX * cellSize;
+
+                int sample = 0;
+
+                if (vX == gridSize && vZ == gridSize && activeRegionModels.TryGetValue(southEastIdx, out PerModelData southEastData))
+                {
+                    // For corner, select north-western-most point south-east neighbour 
+                    sample = southEastData.SourceData.Heightmap.Points[0];
+                }
+                else if (vX == gridSize && vZ < gridSize && activeRegionModels.TryGetValue(eastIdx, out PerModelData eastData))
+                {
+                    // For x end, select west-most point of east neighbour
+                    sample = eastData.SourceData.Heightmap.Points[vZ * gridSize];
+                }
+                else if (vZ == gridSize && vX < gridSize && activeRegionModels.TryGetValue(southIdx, out PerModelData southData))
+                {
+                    // For z end, select north-most point of south neighbour
+                    sample = southData.SourceData.Heightmap.Points[vX];
+                }
+                else
+                {
+                    // If no neighbour was sampled, use source data, but clamp to heightmap size.
+                    int vXLimited = Math.Min(vX, gridSize - 1);
+                    int vZLimited = Math.Min(vZ, gridSize - 1);
+                    sample = sourceData.Heightmap.Points[vZLimited * gridSize + vXLimited];
+                }
+
+                mesh.xyz[xyz++] = sample;
+                mesh.xyz[xyz++] = vZ * cellSize;
             }
         }
 
@@ -115,13 +150,15 @@ public class FarRegionRenderer : IRenderer
             }
         }
 
-        if (activeRegionModels.ContainsKey(sourceData.RegionIndex))
+        if (activeRegionModels.TryGetValue(sourceData.RegionIndex, out PerModelData existingData))
         {
+            existingData.MeshRef.Dispose();
             activeRegionModels.Remove(sourceData.RegionIndex);
         }
 
         activeRegionModels.Add(sourceData.RegionIndex, new PerModelData()
         {
+            SourceData = sourceData,
             Position = new Vec3d(
                     sourceData.RegionX * sourceData.RegionSize,
                     0.0f,
@@ -130,10 +167,27 @@ public class FarRegionRenderer : IRenderer
             MeshRef = capi.Render.UploadMesh(mesh),
         });
 
-        // capi.Logger.Notification("new region, pos x {0}, z {1}",
-        //             sourceData.RegionX * sourceData.RegionSize,
-        //             sourceData.RegionZ * sourceData.RegionSize
-        //         );
+        if (!isRebuild)
+        {
+            // Re-build neighbours that are affected by this new data.
+            var westIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, 0, sourceData.RegionMapSize);
+            var northIdx = RegionNeighbourIndex(sourceData.RegionIndex, 0, -1, sourceData.RegionMapSize);
+            var northWestIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, -1, sourceData.RegionMapSize);
+
+
+            if (activeRegionModels.TryGetValue(northIdx, out PerModelData northData))
+            {
+                BuildRegion(northData.SourceData, true);
+            }
+            if (activeRegionModels.TryGetValue(westIdx, out PerModelData westData))
+            {
+                BuildRegion(westData.SourceData, true);
+            }
+            if (activeRegionModels.TryGetValue(northWestIdx, out PerModelData northWestData))
+            {
+                BuildRegion(northWestData.SourceData, true);
+            }
+        }
     }
 
     public void UnloadRegion(long regionIdx)
@@ -145,12 +199,18 @@ public class FarRegionRenderer : IRenderer
         }
     }
 
-    public void Dispose()
+    public void ClearLoadedRegions()
     {
         foreach (var regionModel in activeRegionModels.Values)
         {
             regionModel.MeshRef.Dispose();
         }
+        activeRegionModels.Clear();
+    }
+
+    public void Dispose()
+    {
+        ClearLoadedRegions();
     }
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
@@ -161,13 +221,17 @@ public class FarRegionRenderer : IRenderer
 
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
 
-        var horizonColorDay = new Vec4f(0.525f, 0.620f, 0.776f, 1.0f);
-        var horizonColorNight = new Vec4f(0.114f, 0.149f, 0.255f, 1.0f);
-
-        //rapi.Set3DProjection(farViewDistance, capi.Settings.Float.Get("fieldOfView"));
-
+        // Prevent far terrain from being cut off at zfar
+        //
+        //
         var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
         rapi.Set3DProjection(farViewDistance, fov);
+
+        var viewDistance = (float)capi.World.Player.WorldData.DesiredViewDistance;
+
+        // var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
+        // float num = (float)rapi.FrameWidth / (float)rapi.FrameHeight;
+        // Mat4f.Perspective(projectionMat, fov, num, 32f, farViewDistance);
 
         foreach (var regionModel in activeRegionModels.Values)
         {
@@ -180,25 +244,25 @@ public class FarRegionRenderer : IRenderer
 
             prog.UniformMatrix("modelMatrix", modelMat.Values);
             prog.UniformMatrix("viewMatrix", rapi.CameraMatrixOriginf);
+            //prog.UniformMatrix("projectionMatrix", projectionMat);
             prog.UniformMatrix("projectionMatrix", rapi.CurrentProjectionMatrix);
 
-            prog.Uniform("horizonColorDay", horizonColorDay);
-            prog.Uniform("horizonColorNight", horizonColorNight);
+            prog.Uniform("mainColor", mainColor);
 
             prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
             prog.Uniform("sunColor", capi.World.Calendar.SunColor);
             prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength * 0.95f));
 
             prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
-            prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
             prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
+            prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
+            prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
             prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
             prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
 
-            prog.Uniform("viewDistance", (float)capi.World.Player.WorldData.DesiredViewDistance);
+            prog.Uniform("viewDistance", viewDistance);
             prog.Uniform("farViewDistance", (float)this.farViewDistance);
 
-            rapi.GlToggleBlend(true, blendMode);
             rapi.RenderMesh(regionModel.MeshRef);
 
             prog.Stop();

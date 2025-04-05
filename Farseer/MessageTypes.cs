@@ -29,6 +29,8 @@ public class FarRegionData
     [ProtoMember(4)]
     public int RegionSize; // total size in blocks
     [ProtoMember(5)]
+    public int RegionMapSize; // size of each axis of the region map, given to client for indexing.
+    [ProtoMember(6)]
     public FarRegionHeightmap Heightmap;
 }
 

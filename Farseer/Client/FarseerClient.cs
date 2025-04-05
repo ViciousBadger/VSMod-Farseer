@@ -1,11 +1,8 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using System;
-using Vintagestory.Common;
-using Vintagestory.Client.NoObf;
 
 namespace Farseer;
-
 
 public class FarseerClient : IDisposable
 {

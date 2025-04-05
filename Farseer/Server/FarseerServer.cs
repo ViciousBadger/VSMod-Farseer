@@ -41,8 +41,10 @@ public class FarseerServer : IDisposable
     {
         if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
         {
-            // Just update view distance
+            // Assume that the player changed their view distance. Should clear and re-send regions.
             player.FarViewDistance = request.FarViewDistance;
+            player.RegionsInView.Clear();
+            player.RegionsLoaded.Clear();
         }
         else
         {
@@ -82,7 +84,6 @@ public class FarseerServer : IDisposable
     {
         foreach (var player in playersWithFarsee.Values)
         {
-            modSystem.Mod.Logger.Notification(player.ServerPlayer.PlayerName);
             if (player.RegionsInView.Contains(regionData.RegionIndex) && !player.RegionsLoaded.Contains(regionData.RegionIndex))
             {
                 LoadRegionForPlayer(player, regionData);
