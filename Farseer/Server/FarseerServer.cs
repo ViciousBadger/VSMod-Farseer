@@ -69,10 +69,17 @@ public class FarseerServer : IDisposable
         }
         else
         {
-            request.ClientConfig.FarViewDistance = GameMath.Min(request.ClientConfig.FarViewDistance, config.MaxClientViewDistance);
+            if (sapi.Server.IsDedicated)
+            {
+                request.ClientConfig.FarViewDistance = GameMath.Min(request.ClientConfig.FarViewDistance, config.MaxClientViewDistance);
+            }
+            else
+            {
+                modSystem.Mod.Logger.Chat("Running locally, no view distance limit enforced.");
+            }
             playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, ClientConfig = request.ClientConfig });
         }
-        modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
+        modSystem.Mod.Logger.Chat("Enabled for player " + fromPlayer.PlayerName);
     }
 
     private void UpdateRegionsInView()
