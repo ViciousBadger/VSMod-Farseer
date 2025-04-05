@@ -58,10 +58,13 @@ public class FarseerClient : IDisposable
     public void Init()
     {
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SendPacket(new FarEnableRequest
+        if (channel != null)
         {
-            ClientConfig = config,
-        });
+            channel.SendPacket(new FarEnableRequest
+            {
+                ClientConfig = config,
+            });
+        }
     }
 
     public void Dispose()
