@@ -14,6 +14,11 @@ uniform vec3 sunPosition;
 uniform float dayLight; 
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outGlow;
+#if SSAOLEVEL > 0
+layout(location = 2) out vec4 outGNormal;
+layout(location = 3) out vec4 outGPosition;
+#endif
 
 #include noise3d.ash
 #include dither.fsh
@@ -23,33 +28,44 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    vec4 col = rgbaMain;
+    if (rgbaMain.a < 0.05) discard;
+
+    outColor = rgbaMain;
 
     // Apply sky glow, similarly to with clouds, because the distant atmosphere
     // should be colored by sun
     float sealevelOffsetFactor = 0.25;
-	float dayLight = 1;
     vec4 skyGlow = getSkyGlowAt(worldPosf, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, 0.7);
 
-    // col.rgb *= mix(vec3(1), 1.2 * skyGlow.rgb, skyGlow.a);
-    // col.rgb *= max(1, 0.9 + skyGlow.a/10);
+    outColor.rgb *= mix(vec3(1), 1.2 * skyGlow.rgb, skyGlow.a);
+    outColor.rgb *= max(1, 0.9 + skyGlow.a/10);
 
- //    float baseBloom = max(0, 0.25 - fogAmountf/2);
-	// #if BLOOM == 1
-	// 	col.rgb *= 1 - baseBloom;
-	// #endif
+    float baseBloom = max(0, 0.25 - fogAmountf/2);
+#if BLOOM == 1
+ 	outColor.rgb *= 1 - baseBloom;
+#endif
 
-	col.rgb = mix(col.rgb, rgbaFog.rgb, fogAmountf);
-    col.rgb += vec3(0.1, 0.5, 0.1) * nightVisionStrengthv;
+	outColor.rgb = mix(outColor.rgb, rgbaFog.rgb, fogAmountf);
 
-    if (col.a < 0.1) discard;
-    if (col.a < 0.999) {
+    float murkiness = max(0, getSkyMurkiness() - 14*fogDensityIn);
+	outColor.rgb = applyUnderwaterEffects(outColor.rgb, murkiness);
+
+    outGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
+
+    outColor.rgb += vec3(0.1, 0.5, 0.1) * nightVisionStrengthv;
+
+    // haxyFade
+    if (outColor.a < 0.999) {
         vec4 skyColor = vec4(1);
         vec4 skyGlow = vec4(1);
 
         getSkyColorAt(worldPosf, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, skyColor, skyGlow);
-        col.rgb = mix(skyColor.rgb, col.rgb, max(1-dayLight, max(0, rgbaMain.a)));
+        outColor.rgb = mix(skyColor.rgb, outColor.rgb, max(1-dayLight, max(0, rgbaMain.a)));
     }
 
-    outColor = col;
+#if SSAOLEVEL > 0
+	outGPosition = vec4(0);
+	outGNormal = vec4(0);
+#endif
+
 }

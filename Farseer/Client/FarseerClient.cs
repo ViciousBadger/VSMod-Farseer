@@ -11,7 +11,7 @@ public class FarseerClient : IDisposable
 
     FarRegionRenderer renderer;
 
-    int farViewDistance = 4096;
+    int farViewDistance = 3000;
 
     public FarseerClient(ModSystem mod, ICoreClientAPI api)
     {

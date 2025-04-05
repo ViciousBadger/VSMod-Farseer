@@ -32,16 +32,23 @@ out float nightVisionStrengthv;
 
 void main()
 {
+
+
     vec4 worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
 
     worldPos.xyz = applyPerceptionWarping(worldPos.xyz);
 
     // "Fade" into sky color by distance
     float distFade = length(worldPos.xz) / (farViewDistance * 0.8);
-    vec4 color = vec4(mainColor * dayLight, clamp(1.0 - distFade, 0.0, 1.0));
+    vec4 color = vec4(mainColor * dayLight - 0.15, clamp(1.0 - distFade, 0.0, 1.0));
+    //vec4 color = vec4(mainColor * dayLight - 0.1, 1.0);
+    color.rgb += distFade * 0.2 * dayLight;
+
+    // Fade out near the *far* render distance
+    color.a *= clamp(20 * (1.1 - length(worldPos.xz) / farViewDistance) - 5, 0.0, 1.0);
 
     // Subtract approximately alpha of chunks for smooth-ish fade
-    float chunk_a = clamp(18.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), -1, 1);
+    float chunk_a = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), 0, 1);
     color.a = min(1.0 - chunk_a, color.a);
 
     float fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);

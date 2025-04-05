@@ -251,7 +251,7 @@ public class FarRegionRenderer : IRenderer
 
             prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
             prog.Uniform("sunColor", capi.World.Calendar.SunColor);
-            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength * 0.95f));
+            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength - capi.World.Calendar.MoonLightStrength));
 
             prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
             prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
