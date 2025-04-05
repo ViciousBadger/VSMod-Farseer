@@ -15,4 +15,6 @@ public class FarseerServerConfig
     public int HeightmapGridSize = 64;
     [ProtoMember(2)]
     public float ChunkQueueThreshold = 0.5f;
+    [ProtoMember(3)]
+    public int MaxClientViewDistance = 3000;
 }

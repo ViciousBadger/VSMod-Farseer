@@ -3,6 +3,7 @@ using Vintagestory.API.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Vintagestory.API.MathTools;
 
 namespace Farseer;
 
@@ -68,6 +69,7 @@ public class FarseerServer : IDisposable
         }
         else
         {
+            request.ClientConfig.FarViewDistance = GameMath.Min(request.ClientConfig.FarViewDistance, config.MaxClientViewDistance);
             playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, ClientConfig = request.ClientConfig });
         }
         modSystem.Mod.Logger.Chat("enabled for player " + fromPlayer.PlayerName);
