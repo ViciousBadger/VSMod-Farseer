@@ -259,6 +259,9 @@ public class FarRegionRenderer : IRenderer
             prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
             prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
 
+            //prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
+            //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
+
             prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
 
             prog.Uniform("viewDistance", viewDistance);

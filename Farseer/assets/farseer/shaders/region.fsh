@@ -4,7 +4,7 @@
 in vec4 worldPos;
 in vec4 rgbaFog;
 in float dist;
-in float fogAmountf;
+in float fogAmount;
 in float nightVisionStrengthv;
 
 uniform float fogDensityIn;
@@ -50,7 +50,9 @@ void main()
     skyGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
 
     terraColor *= dayLight - (0.14 * (1-dist));
-	terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmountf);
+	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
+    terraColor = applyFog(terraColor, fogAmount);
+    terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
     terraGlow *= dist;
 
     float fade = min(1.0, dist * dist);

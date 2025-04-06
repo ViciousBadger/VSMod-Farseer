@@ -20,7 +20,7 @@ uniform float farViewDistance;
 out vec4 worldPos;
 out vec4 rgbaFog;
 out float dist;
-out float fogAmountf;
+out float fogAmount;
 out float nightVisionStrengthv;
 
 #include vertexflagbits.ash
@@ -40,10 +40,10 @@ void main()
     float chunkAlpha = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), 0, 1);
     dist -= chunkAlpha;
 
-    float fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
+    fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 
     rgbaFog = rgbaFogIn;
-    fogAmountf = clamp(fogAmount + clamp(1 - 4 * dayLight, -0.04, 1), 0, 1);
+    //fogAmountf = clamp(fogAmount + clamp(1 - 4 * dayLight, -0.04, 1), 0, 1);
 	nightVisionStrengthv = nightVisionStrength;
 
     vec4 camPos = viewMatrix * worldPos;

@@ -34,8 +34,8 @@ public class FarseerServer : IDisposable
         regionProvider.RegionReady += TryLoadRegionForPlayersInView;
 
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
-        sapi.Event.RegisterGameTickListener((_) => UpdateRegionsInView(), 1000);
-        sapi.Event.RegisterGameTickListener((_) => PruneUnusedRegions(), 1000 * 10, 1000);
+        sapi.Event.RegisterGameTickListener((_) => UpdateRegionsInView(), 7005, 2000);
+        sapi.Event.RegisterGameTickListener((_) => PruneUnusedRegions(), 15002, 4000);
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
@@ -84,11 +84,30 @@ public class FarseerServer : IDisposable
 
     private void UpdateRegionsInView()
     {
+        // Select highest priority for each region.
+        var regionPrioritiesCombined = new Dictionary<long, int>();
+
         foreach (var player in playersWithFarsee.Values)
         {
-            var regionsInViewNow = GetRegionsInViewOfPlayer(player);
+            var regionsInViewNow = GetRegionsInViewOfPlayer(player, out Dictionary<long, int> regionPrioritiesForPlayer);
             var regionsInViewBefore = player.RegionsInView;
             player.RegionsInView = regionsInViewNow;
+
+            foreach (var pair in regionPrioritiesForPlayer)
+            {
+                if (regionPrioritiesCombined.TryGetValue(pair.Key, out int existingPrio))
+                {
+                    if (pair.Value < existingPrio)
+                    {
+                        // Override only if "higher" priority
+                        regionPrioritiesCombined[pair.Key] = pair.Value;
+                    }
+                }
+                else
+                {
+                    regionPrioritiesCombined.Add(pair.Key, pair.Value);
+                }
+            }
 
             foreach (var newRegion in GetRegionsNewInView(regionsInViewBefore, regionsInViewNow))
             {
@@ -107,6 +126,7 @@ public class FarseerServer : IDisposable
                 }
             }
         }
+        regionProvider.Reprioritize(regionPrioritiesCombined);
     }
 
     private void TryLoadRegionForPlayersInView(FarRegionData regionData)
@@ -157,7 +177,7 @@ public class FarseerServer : IDisposable
         return regionsInViewBefore.Where(region => !regionsInViewNow.Contains(region)).ToHashSet();
     }
 
-    private HashSet<long> GetRegionsInViewOfPlayer(FarseePlayer player)
+    private HashSet<long> GetRegionsInViewOfPlayer(FarseePlayer player, out Dictionary<long, int> priorities)
     {
         var playerBlockPos = player.ServerPlayer.Entity.Pos.AsBlockPos;
         var playerRegionIdx = sapi.WorldManager.MapRegionIndex2DByBlockPos(playerBlockPos.X, playerBlockPos.Z);
@@ -168,6 +188,9 @@ public class FarseerServer : IDisposable
 
         var result = new HashSet<long>();
 
+        priorities = new();
+        var thisPriority = 0;
+
         var walker = new SpiralWalker(new Coord2D(), farViewDistanceInRegions);
         foreach (var coord in walker)
         {
@@ -175,7 +198,10 @@ public class FarseerServer : IDisposable
             {
                 var thisRegionX = playerRegionCoord.X + coord.X;
                 var thisRegionZ = playerRegionCoord.Z + coord.Z;
-                result.Add(sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ));
+
+                var regionIdx = sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ);
+                result.Add(regionIdx);
+                priorities.Add(regionIdx, thisPriority++);
             }
         }
         return result;

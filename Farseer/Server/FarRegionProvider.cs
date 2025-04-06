@@ -86,7 +86,11 @@ public class FarRegionProvider : IDisposable
         }
 
         generator.CancelTasksNotIn(regionsToKeep);
+    }
 
+    public void Reprioritize(Dictionary<long, int> regionPriorities)
+    {
+        generator.SortTasksByPriority(regionPriorities);
     }
 
     private string GetDbFilePath()

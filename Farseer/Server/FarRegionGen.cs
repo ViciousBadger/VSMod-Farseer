@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
@@ -101,11 +102,38 @@ public class FarRegionGen
         }
     }
 
+    public void SortTasksByPriority(Dictionary<long, int> regionPriorities)
+    {
+        if (regionGenerationQueue.Count > 0)
+        {
+            regionGenerationQueue.Sort((a, b) =>
+            {
+                // Always prioritize half baked regions to avoid scattered chunk-loading
+                var mostFinished = a.FinishedChunks.Count.CompareTo(b.FinishedChunks.Count);
+                if (mostFinished != 0)
+                {
+                    return -mostFinished;
+                }
+
+                if (regionPriorities.TryGetValue(a.RegionIdx, out int aPrio))
+                {
+                    if (regionPriorities.TryGetValue(b.RegionIdx, out int bPrio))
+                    {
+                        return aPrio.CompareTo(bPrio);
+                    }
+                }
+                // No sorting done if either region is missing a priority.
+                return 0;
+            });
+        }
+    }
+
     private void LoadNextFarChunksInQueue()
     {
-        int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * modSystem.Server.Config.ChunkQueueThreshold); // Leave space for vanilla chunk gen..
+        //int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * modSystem.Server.Config.ChunkQueueThreshold); // Leave space for vanilla chunk gen..
 
-        var regionsToPushToQueue = GameMath.Clamp((chunkQueueLimit - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionArea, 0, regionGenerationQueue.Count);
+        var threshold = modSystem.Server.Config.ChunkQueueThreshold;
+        var regionsToPushToQueue = GameMath.Clamp((threshold - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionArea, 0, regionGenerationQueue.Count);
 
         for (var i = 0; i < regionsToPushToQueue; i++)
         {
@@ -124,7 +152,11 @@ public class FarRegionGen
 
                     if (!inProgressRegion.FinishedChunks.Contains(sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ)))
                     {
-                        sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                        sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
+                        {
+                            UntilPass = EnumWorldGenPass.Terrain,
+                            OnGenerated = OnChunkColumnPeeked,
+                        });
                     }
                 }
             }
@@ -133,6 +165,42 @@ public class FarRegionGen
         if (regionsToPushToQueue > 0)
         {
             modSystem.Mod.Logger.Notification("Generating {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
+        }
+    }
+
+    private void OnChunkColumnPeeked(Dictionary<Vec2i, IServerChunk[]> columnsByChunkCoordinate)
+    {
+        modSystem.Mod.Logger.Notification("Peek!!!");
+
+        foreach (var pair in columnsByChunkCoordinate)
+        {
+            modSystem.Mod.Logger.Notification(pair.Key.ToString());
+        }
+    }
+
+    private void OnChunkColumnPeeked(Vec2i chunkCoord, IWorldChunk[] chunks)
+    {
+        var regionOfChunkX = chunkCoord.X / chunksInRegionColumn;
+        var regionOfChunkZ = chunkCoord.Y / chunksInRegionColumn;
+        var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
+
+        // We only care about the chunk data if it's part of one of the enqueued regions..
+        var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
+        if (inProgressRegion != null)
+        {
+            PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
+
+            if (IsRegionFullyPopulated(inProgressRegion))
+            {
+                // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
+                FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
+                regionGenerationQueue.Remove(inProgressRegion);
+
+                if (regionGenerationQueue.Count == 0)
+                {
+                    modSystem.Mod.Logger.Notification("All done!");
+                }
+            }
         }
     }
 
@@ -161,7 +229,6 @@ public class FarRegionGen
             }
         }
     }
-
 
     private bool IsRegionFullyPopulated(InProgressRegion region)
     {
