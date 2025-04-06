@@ -78,6 +78,11 @@ public class FarRegionRenderer : IRenderer
 
     public void BuildRegion(FarRegionData sourceData, bool isRebuild = false)
     {
+        bool GridSizesMatch(FarRegionData regionA, FarRegionData regionB)
+        {
+            return regionA.Heightmap.GridSize == regionB.Heightmap.GridSize;
+        }
+
         // Find neighbour id's for stitching
         var eastIdx = RegionNeighbourIndex(sourceData.RegionIndex, 1, 0, sourceData.RegionMapSize);
         var southIdx = RegionNeighbourIndex(sourceData.RegionIndex, 0, 1, sourceData.RegionMapSize);
@@ -105,17 +110,17 @@ public class FarRegionRenderer : IRenderer
 
                 int sample = 0;
 
-                if (vX == gridSize && vZ == gridSize && activeRegionModels.TryGetValue(southEastIdx, out PerModelData southEastData))
+                if (vX == gridSize && vZ == gridSize && activeRegionModels.TryGetValue(southEastIdx, out PerModelData southEastData) && GridSizesMatch(sourceData, southEastData.SourceData))
                 {
                     // For corner, select north-western-most point south-east neighbour 
                     sample = southEastData.SourceData.Heightmap.Points[0];
                 }
-                else if (vX == gridSize && vZ < gridSize && activeRegionModels.TryGetValue(eastIdx, out PerModelData eastData))
+                else if (vX == gridSize && vZ < gridSize && activeRegionModels.TryGetValue(eastIdx, out PerModelData eastData) && GridSizesMatch(sourceData, eastData.SourceData))
                 {
                     // For x end, select west-most point of east neighbour
                     sample = eastData.SourceData.Heightmap.Points[vZ * gridSize];
                 }
-                else if (vZ == gridSize && vX < gridSize && activeRegionModels.TryGetValue(southIdx, out PerModelData southData))
+                else if (vZ == gridSize && vX < gridSize && activeRegionModels.TryGetValue(southIdx, out PerModelData southData) && GridSizesMatch(sourceData, southData.SourceData))
                 {
                     // For z end, select north-most point of south neighbour
                     sample = southData.SourceData.Heightmap.Points[vX];
@@ -175,15 +180,15 @@ public class FarRegionRenderer : IRenderer
             var northWestIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, -1, sourceData.RegionMapSize);
 
 
-            if (activeRegionModels.TryGetValue(northIdx, out PerModelData northData))
+            if (activeRegionModels.TryGetValue(northIdx, out PerModelData northData) && GridSizesMatch(sourceData, northData.SourceData))
             {
                 BuildRegion(northData.SourceData, true);
             }
-            if (activeRegionModels.TryGetValue(westIdx, out PerModelData westData))
+            if (activeRegionModels.TryGetValue(westIdx, out PerModelData westData) && GridSizesMatch(sourceData, westData.SourceData))
             {
                 BuildRegion(westData.SourceData, true);
             }
-            if (activeRegionModels.TryGetValue(northWestIdx, out PerModelData northWestData))
+            if (activeRegionModels.TryGetValue(northWestIdx, out PerModelData northWestData) && GridSizesMatch(sourceData, northWestData.SourceData))
             {
                 BuildRegion(northWestData.SourceData, true);
             }
