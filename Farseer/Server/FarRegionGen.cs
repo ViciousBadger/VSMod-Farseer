@@ -35,6 +35,7 @@ public class FarRegionGen
     private ICoreServerAPI sapi;
 
     private List<InProgressRegion> regionGenerationQueue = new();
+    private HashSet<long> peekWaiting = new();
 
     private int chunksInRegionColumn;
     private int chunksInRegionArea;
@@ -44,7 +45,7 @@ public class FarRegionGen
         this.modSystem = modSystem;
         this.sapi = sapi;
         sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
-        sapi.Event.RegisterGameTickListener((_) => LoadNextFarChunksInQueue(), 2500);
+        sapi.Event.RegisterGameTickListener((_) => LoadNextFarChunksInQueue(), 8004);
 
         this.chunksInRegionColumn = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
         this.chunksInRegionArea = this.chunksInRegionColumn * this.chunksInRegionColumn;
@@ -149,13 +150,30 @@ public class FarRegionGen
                 {
                     int targetChunkX = chunkStartX + x;
                     int targetChunkZ = chunkStartZ + z;
+                    var targetChunkIdx = sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ);
 
-                    if (!inProgressRegion.FinishedChunks.Contains(sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ)))
+                    if (!peekWaiting.Contains(targetChunkIdx) && !inProgressRegion.FinishedChunks.Contains(targetChunkIdx))
                     {
-                        sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
+                        // Test if the chunk exists first. It's faster to load
+                        // existing chunks than to peek. (Peek ignores saved data)
+                        sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
                         {
-                            UntilPass = EnumWorldGenPass.Terrain,
-                            OnGenerated = OnChunkColumnPeeked,
+                            if (exists)
+                            {
+                                sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                            }
+                            else
+                            {
+                                // It seems peek is about ~20-60% faster than
+                                // full chunk generation and less taxing on the
+                                // server (not to mention disk space)
+                                sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
+                                {
+                                    UntilPass = EnumWorldGenPass.Terrain,
+                                    OnGenerated = OnChunkColumnPeeked,
+                                });
+                                peekWaiting.Add(targetChunkIdx);
+                            }
                         });
                     }
                 }
@@ -164,41 +182,27 @@ public class FarRegionGen
 
         if (regionsToPushToQueue > 0)
         {
-            modSystem.Mod.Logger.Notification("Generating {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
+            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
         }
     }
 
     private void OnChunkColumnPeeked(Dictionary<Vec2i, IServerChunk[]> columnsByChunkCoordinate)
     {
-        modSystem.Mod.Logger.Notification("Peek!!!");
-
         foreach (var pair in columnsByChunkCoordinate)
         {
-            modSystem.Mod.Logger.Notification(pair.Key.ToString());
-        }
-    }
-
-    private void OnChunkColumnPeeked(Vec2i chunkCoord, IWorldChunk[] chunks)
-    {
-        var regionOfChunkX = chunkCoord.X / chunksInRegionColumn;
-        var regionOfChunkZ = chunkCoord.Y / chunksInRegionColumn;
-        var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
-
-        // We only care about the chunk data if it's part of one of the enqueued regions..
-        var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
-        if (inProgressRegion != null)
-        {
-            PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
-
-            if (IsRegionFullyPopulated(inProgressRegion))
+            var chunkIdx = sapi.WorldManager.MapChunkIndex2D(pair.Key.X, pair.Key.Y);
+            peekWaiting.Remove(chunkIdx);
+            if (pair.Value.Length > 0)
             {
-                // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
-                FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
-                regionGenerationQueue.Remove(inProgressRegion);
+                var regionOfChunkX = pair.Key.X / chunksInRegionColumn;
+                var regionOfChunkZ = pair.Key.Y / chunksInRegionColumn;
+                var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
 
-                if (regionGenerationQueue.Count == 0)
+                // We only care about the chunk data if it's part of one of the enqueued regions..
+                var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
+                if (inProgressRegion != null)
                 {
-                    modSystem.Mod.Logger.Notification("All done!");
+                    PopulateRegionFromChunk(inProgressRegion, pair.Key.X, pair.Key.Y, pair.Value[0].MapChunk);
                 }
             }
         }
@@ -206,6 +210,8 @@ public class FarRegionGen
 
     private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
     {
+        if (chunks.Length <= 0) return;
+
         var regionOfChunkX = chunkCoord.X / chunksInRegionColumn;
         var regionOfChunkZ = chunkCoord.Y / chunksInRegionColumn;
         var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
@@ -215,18 +221,6 @@ public class FarRegionGen
         if (inProgressRegion != null)
         {
             PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
-
-            if (IsRegionFullyPopulated(inProgressRegion))
-            {
-                // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
-                FarRegionGenerated?.Invoke(inProgressRegion.RegionIdx, inProgressRegion.Heightmap);
-                regionGenerationQueue.Remove(inProgressRegion);
-
-                if (regionGenerationQueue.Count == 0)
-                {
-                    modSystem.Mod.Logger.Notification("All done!");
-                }
-            }
         }
     }
 
@@ -269,6 +263,21 @@ public class FarRegionGen
         }
 
         region.FinishedChunks.Add(sapi.WorldManager.MapChunkIndex2D(chunkX, chunkZ));
+
+        if (IsRegionFullyPopulated(region))
+        {
+            // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
+            FarRegionGenerated?.Invoke(region.RegionIdx, region.Heightmap);
+            regionGenerationQueue.Remove(region);
+
+            // Try to keep up a good pace
+            LoadNextFarChunksInQueue();
+
+            if (regionGenerationQueue.Count == 0)
+            {
+                modSystem.Mod.Logger.Notification("All done!");
+            }
+        }
     }
 
     public void GenerateDummyData(long regionIdx)
