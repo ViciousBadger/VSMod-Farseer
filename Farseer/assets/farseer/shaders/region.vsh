@@ -34,8 +34,11 @@ void main()
     worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
     worldPos = applyGlobalWarping(worldPos);
 
-    float distStart = viewDistance * 0.795;
-    dist = (length(worldPos.xz) - distStart) / (farViewDistance - distStart);
+    float distStart = viewDistance * 0.80;
+    dist = (length(worldPos.xz) - distStart) / (farViewDistance - distStart - 512);
+
+    float chunkAlpha = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), 0, 1);
+    dist -= chunkAlpha;
 
     float fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 

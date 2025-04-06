@@ -252,14 +252,14 @@ public class FarRegionRenderer : IRenderer
 
             prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
             prog.Uniform("sunColor", capi.World.Calendar.SunColor);
-            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.SunLightStrength));
+            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength));
 
             prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
             prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
             prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
             prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
-            //prog.Uniform("flatFogDensity", 0.0f);
-            //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
+
+            prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
 
             prog.Uniform("viewDistance", viewDistance);
             prog.Uniform("farViewDistance", (float)farViewDistance);

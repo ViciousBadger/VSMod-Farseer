@@ -164,7 +164,7 @@ public class FarseerServer : IDisposable
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
         // modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
 
-        int farViewDistanceInRegions = (player.ClientConfig.FarViewDistance / sapi.WorldManager.RegionSize);
+        int farViewDistanceInRegions = (player.ClientConfig.FarViewDistance / sapi.WorldManager.RegionSize) + 1;
 
         var result = new HashSet<long>();
 
