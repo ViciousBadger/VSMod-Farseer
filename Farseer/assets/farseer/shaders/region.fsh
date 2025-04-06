@@ -1,9 +1,9 @@
 #version 330 core
 #extension GL_ARB_explicit_attrib_location: enable
 
-in vec3 worldPosf;
-in vec4 rgbaMain;
+in vec4 worldPos;
 in vec4 rgbaFog;
+in float dist;
 in float fogAmountf;
 in float nightVisionStrengthv;
 
@@ -28,40 +28,21 @@ layout(location = 3) out vec4 outGPosition;
 
 void main()
 {
-    if (rgbaMain.a < 0.05) discard;
+    if (dist < 0.0) discard;
 
-    outColor = rgbaMain;
+    vec4 skyColor = vec4(1);
+    vec4 skyGlow = vec4(1);
+    float sealevelOffsetFactor = 1.0;
 
-    // Apply sky glow, similarly to with clouds, because the distant atmosphere
-    // should be colored by sun
-    float sealevelOffsetFactor = 0.25;
-    vec4 skyGlow = getSkyGlowAt(vec3(worldPosf.x, worldPosf.y+100,worldPosf.z), sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, 0.7);
+    getSkyColorAt(worldPos.xyz, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, skyColor, skyGlow);
 
-    outColor.rgb *= mix(vec3(1), 1.2 * skyGlow.rgb, skyGlow.a);
-    outColor.rgb *= max(1, 0.9 + skyGlow.a/10);
+    outColor = skyColor * (dayLight - (0.14 * (1-dist)));
+    outGlow = skyGlow * dist;
 
-    float baseBloom = max(0, 0.25 - fogAmountf/2);
-#if BLOOM == 1
- 	outColor.rgb *= 1 - baseBloom;
-#endif
+    // Darker tint based on distance.
+    //outColor.rgb *= 0.7 + (dist * 0.3);
 
 	outColor.rgb = mix(outColor.rgb, rgbaFog.rgb, fogAmountf);
-
-    float murkiness = max(0, getSkyMurkiness() - 14*fogDensityIn);
-	outColor.rgb = applyUnderwaterEffects(outColor.rgb, murkiness);
-
-    outGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
-
-    outColor.rgb += vec3(0.1, 0.5, 0.1) * nightVisionStrengthv;
-
-    // haxyFade
-    if (outColor.a < 0.999) {
-        vec4 skyColor = vec4(1);
-        vec4 skyGlow = vec4(1);
-
-        getSkyColorAt(worldPosf, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, skyColor, skyGlow);
-        outColor.rgb = mix(skyColor.rgb, outColor.rgb, max(1-dayLight, max(0, rgbaMain.a)));
-    }
 
 #if SSAOLEVEL > 0
 	outGPosition = vec4(0);
