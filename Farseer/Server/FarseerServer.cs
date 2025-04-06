@@ -79,7 +79,7 @@ public class FarseerServer : IDisposable
             }
             playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, ClientConfig = request.ClientConfig });
         }
-        modSystem.Mod.Logger.Chat("Enabled for player " + fromPlayer.PlayerName);
+        modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.ClientConfig.FarViewDistance);
     }
 
     private void UpdateRegionsInView()
