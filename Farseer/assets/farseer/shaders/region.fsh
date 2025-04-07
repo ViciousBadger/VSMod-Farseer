@@ -14,6 +14,9 @@ uniform vec3 sunPosition;
 uniform float dayLight; 
 
 uniform float skyTint;
+uniform vec4 colorTint;
+uniform float lightLevelAdjust;
+uniform float fadeBias;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outGlow;
@@ -44,24 +47,21 @@ void main()
     float sealevelOffsetFactorSky = 0.25;
     vec3 worldPosInSky = normalize(worldPos.xyz) * 250.0;
     getSkyColorAt(worldPosInSky, sunPosition, sealevelOffsetFactorSky, clamp(dayLight, 0, 1), horizonFog, skyColor, skyGlow);
-
     float murkiness = max(0, getSkyMurkiness() - 14*fogDensityIn);
-	skyColor.rgb = applyUnderwaterEffects(skyColor.rgb, murkiness);
+	  skyColor.rgb = applyUnderwaterEffects(skyColor.rgb, murkiness);
     skyGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
 
-    terraColor *= dayLight - (0.14 * (1-dist));
-	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
+    //terraColor *= dayLight - (0.14 * (1-dist));
+    terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a * (1-dist));
+    terraColor *= dayLight + lightLevelAdjust;
+  	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
     terraColor = applyFog(terraColor, fogAmount);
     terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
     terraGlow *= dist;
 
     float fade = min(1.0, dist * dist);
-    //float fade = 1.0;
     outColor = mix(terraColor, skyColor, fade);
     outGlow = mix(terraGlow, skyGlow, fade);
-
-    // Darker tint based on distance.
-    //outColor.rgb *= 0.7 + (dist * 0.3);
 
 
 #if SSAOLEVEL > 0

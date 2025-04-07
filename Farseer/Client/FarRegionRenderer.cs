@@ -4,6 +4,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
+using Vintagestory.Server;
 
 namespace Farseer;
 
@@ -28,8 +29,6 @@ public class FarRegionRenderer : IRenderer
     private float[] projectionMat = Mat4f.Create();
     private IShaderProgram prog;
 
-    private Vec3f mainColor;
-
     public FarRegionRenderer(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
         this.modSystem = modSystem;
@@ -40,17 +39,30 @@ public class FarRegionRenderer : IRenderer
 
         capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
 
-        // From sky.png
-        mainColor = new Vec3f(0.525f, 0.620f, 0.776f);
-
-        var farFog = new AmbientModifier().EnsurePopulated();
-        farFog.FogDensity = new WeightedFloat(0.005f, 1.0f);
-        farFog.FogMin = new WeightedFloat(0.0f, 1.0f);
-        farFog.FogColor = new WeightedFloatArray(new float[] {
-                mainColor.X,mainColor.Y,mainColor.Z
-            }, 1.0f);
-
+        // var farFog = new AmbientModifier().EnsurePopulated();
+        // farFog.FogDensity = new WeightedFloat(0.005f, 1.0f);
+        // farFog.FogMin = new WeightedFloat(0.0f, 1.0f);
+        // farFog.FogColor = new WeightedFloatArray(new float[] {
+        //         mainColor.X,mainColor.Y,mainColor.Z
+        //     }, 1.0f);
         //capi.Ambient.CurrentModifiers.Add("farfog", farFog);
+    }
+
+    public void Init()
+    {
+        ClearLoadedRegions();
+
+        var farViewDistance = modSystem.Client.Config.FarViewDistance;
+        if (farViewDistance > 3000f)
+        {
+            var clientMain = ((ClientMain)capi.World);
+            var mainCam = clientMain.MainCamera;
+
+            var prop = mainCam.GetType().GetField("ZFar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            prop.SetValue(mainCam, farViewDistance);
+
+            capi.Render.Reset3DProjection();
+        }
     }
 
     public bool LoadShader()
@@ -230,10 +242,17 @@ public class FarRegionRenderer : IRenderer
         // Prevent far terrain from being cut off at zfar
         //
         //
-        var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
-        rapi.Set3DProjection(farViewDistance, fov);
+        //var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
+        //rapi.Set3DProjection(farViewDistance, fov);
 
         var viewDistance = (float)capi.World.Player.WorldData.DesiredViewDistance;
+
+        var colorTintVec = new Vec4f(
+            modSystem.Client.Config.ColorTintR,
+            modSystem.Client.Config.ColorTintG,
+            modSystem.Client.Config.ColorTintB,
+            modSystem.Client.Config.ColorTintA
+        );
 
         // var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
         // float num = (float)rapi.FrameWidth / (float)rapi.FrameHeight;
@@ -253,8 +272,6 @@ public class FarRegionRenderer : IRenderer
             //prog.UniformMatrix("projectionMatrix", projectionMat);
             prog.UniformMatrix("projectionMatrix", rapi.CurrentProjectionMatrix);
 
-            prog.Uniform("mainColor", mainColor);
-
             prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
             prog.Uniform("sunColor", capi.World.Calendar.SunColor);
             prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength));
@@ -268,6 +285,9 @@ public class FarRegionRenderer : IRenderer
             //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
 
             prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
+            prog.Uniform("colorTint", colorTintVec);
+            prog.Uniform("lightLevelAdjust", modSystem.Client.Config.LightLevelAdjust);
+            prog.Uniform("fadeBias", modSystem.Client.Config.FadeBias);
 
             prog.Uniform("viewDistance", viewDistance);
             prog.Uniform("farViewDistance", (float)farViewDistance);
@@ -276,6 +296,6 @@ public class FarRegionRenderer : IRenderer
 
             prog.Stop();
         }
-        rapi.Reset3DProjection();
+        //rapi.Reset3DProjection();
     }
 }

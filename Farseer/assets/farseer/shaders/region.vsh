@@ -7,7 +7,6 @@ uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-uniform vec3 mainColor; 
 uniform vec3 sunColor; 
 uniform float dayLight; 
 

@@ -133,7 +133,7 @@ public class FarRegionGen
     {
         //int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * modSystem.Server.Config.ChunkQueueThreshold); // Leave space for vanilla chunk gen..
 
-        var threshold = modSystem.Server.Config.ChunkQueueThreshold;
+        var threshold = modSystem.Server.Config.ChunkGenerationQueueThreshold;
         var regionsToPushToQueue = GameMath.Clamp((threshold - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionArea, 0, regionGenerationQueue.Count);
 
         for (var i = 0; i < regionsToPushToQueue; i++)

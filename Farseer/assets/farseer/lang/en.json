@@ -1,1 +1,13 @@
-{}
+{
+  "title": "Farseer",
+  "toggle-config": "Toggle Farseer settings window",
+  "view-distance": "Far view distance",
+  "sky-tint": "Sky tint",
+  "color-tint-r": "Color tint (R)",
+  "color-tint-g": "Color tint (G)",
+  "color-tint-b": "Color tint (B)",
+  "color-tint-a": "Color tint (A)",
+  "light-level-adjust": "Light level adjust",
+  "fade-bias": "Fade bias",
+  "apply": "Apply changes"
+}
