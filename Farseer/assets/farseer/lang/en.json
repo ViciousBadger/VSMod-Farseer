@@ -8,5 +8,6 @@
   "color-tint-b": "Color tint (B)",
   "color-tint-a": "Color tint (A)",
   "light-level-bias": "Light level influence",
-  "fade-bias": "Fade bias"
+  "fade-bias": "Fade bias",
+  "reset": "Reset to defaults"
 }

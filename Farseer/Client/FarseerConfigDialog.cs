@@ -8,6 +8,8 @@ public class FarseerConfigDialog : GuiDialog
 {
     FarseerModSystem modSystem;
 
+    GuiComposer composer;
+
     private long configSaveDelayListener = -1;
 
     public FarseerConfigDialog(FarseerModSystem modSystem, ICoreClientAPI capi) : base(capi)
@@ -31,8 +33,8 @@ public class FarseerConfigDialog : GuiDialog
     {
         base.OnGuiClosed();
 
-        CancelDebouncedSave();
-        modSystem.Client.SaveConfigChanges();
+        // CancelDebouncedSave();
+        // modSystem.Client.SaveConfigChanges();
     }
 
     private void ComposeDialog()
@@ -43,7 +45,7 @@ public class FarseerConfigDialog : GuiDialog
         ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
         bgBounds.BothSizing = ElementSizing.FitToChildren;
 
-        var composer =
+        composer =
         Composers["farseerconfig"] = capi.Gui.CreateCompo("farseerconfig", dialogBounds)
             .AddShadedDialogBG(bgBounds, true)
             .AddDialogTitleBar(Lang.Get("farseer:config-title"), OnTitleBarClose)
@@ -70,7 +72,9 @@ public class FarseerConfigDialog : GuiDialog
             .AddSlider(OnChangeLightLevelBias, contentBounds = contentBounds.BelowCopy(), "lightLevelBiasSlider")
 
             .AddStaticText(Lang.Get("farseer:fade-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
-            .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider");
+            .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider")
+
+            .AddButton(Lang.Get("farseer:reset"), ResetConfig, contentBounds = contentBounds.BelowCopy(0.0, 20.0), EnumButtonStyle.Small);
 
         bgBounds.WithChildren(contentBounds);
 
@@ -86,6 +90,27 @@ public class FarseerConfigDialog : GuiDialog
 
         composer.Compose();
         Composers["farseerconfig"] = composer;
+    }
+
+    private void ReadSliders()
+    {
+        var config = modSystem.Client.Config;
+        composer.GetSlider("farViewDistanceSlider").SetValues(config.FarViewDistance, 512, 16384, 512);
+        composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 300, 1);
+        composer.GetSlider("colorTintRSlider").SetValues((int)(config.ColorTintR * 100), 0, 100, 1);
+        composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1);
+        composer.GetSlider("colorTintBSlider").SetValues((int)(config.ColorTintB * 100), 0, 100, 1);
+        composer.GetSlider("colorTintASlider").SetValues((int)(config.ColorTintA * 100), 0, 100, 1);
+        composer.GetSlider("lightLevelBiasSlider").SetValues((int)(config.LightLevelBias * 100), 1, 99, 1);
+        composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 1, 99, 1);
+    }
+
+    private bool ResetConfig()
+    {
+        modSystem.Client.Config.Reset();
+        modSystem.Client.SaveConfigChanges();
+        ReadSliders();
+        return true;
     }
 
     private bool OnChangeFarViewDistance(int value)

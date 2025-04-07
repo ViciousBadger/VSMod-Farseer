@@ -54,7 +54,7 @@ public class FarseerClient : IDisposable
                 true, // Control
                 true // Shift
         );
-        capi.Input.SetHotKeyHandler("toggleFarseerConfig", TestHandler);
+        capi.Input.SetHotKeyHandler("toggleFarseerConfig", ToggleConfigDialog);
 
         capi.Event.LevelFinalize += Init;
     }
@@ -67,9 +67,8 @@ public class FarseerClient : IDisposable
         Init();
     }
 
-    private bool TestHandler(KeyCombination t1)
+    private bool ToggleConfigDialog(KeyCombination _)
     {
-        modSystem.Mod.Logger.Notification("hey");
         configDialog.Toggle();
         return true;
     }

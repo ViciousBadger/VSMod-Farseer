@@ -92,14 +92,9 @@ public class FarRegionGen
     public void CancelTasksNotIn(HashSet<long> regionsToKeep)
     {
         var n = regionGenerationQueue.RemoveAll(r => !regionsToKeep.Contains(r.RegionIdx) && r.FinishedChunks.Count == 0);
-        //lol
-        if (n == 1)
+        if (n > 0)
         {
-            modSystem.Mod.Logger.Notification("Cancelling {0} far generation task", n);
-        }
-        else if (n > 1)
-        {
-            modSystem.Mod.Logger.Notification("Cancelling {0} far generation tasks", n);
+            modSystem.Mod.Logger.Notification("Cancelling {0} far generation task(s) because no players are in range.", n);
         }
     }
 
@@ -182,7 +177,7 @@ public class FarRegionGen
 
         if (regionsToPushToQueue > 0)
         {
-            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway regions.. ({1} regions total in queue)", regionsToPushToQueue, regionGenerationQueue.Count);
+            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
         }
     }
 

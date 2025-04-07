@@ -98,16 +98,15 @@ public class FarseerServer : IDisposable
                 var dist = oldPos.DistanceTo(newPos);
                 if (dist > 128f)
                 {
-                    modSystem.Mod.Logger.Notification("{0} moved!!!", player.ServerPlayer.PlayerName);
                     anyPlayerMoved = true;
+                    player.LastPos = newPos.Clone();
                 }
             }
             else
             {
                 anyPlayerMoved = true;
+                player.LastPos = newPos.Clone();
             }
-
-            player.LastPos = newPos.Clone();
         }
         return anyPlayerMoved;
     }

@@ -6,21 +6,38 @@ namespace Farseer;
 public class FarseerClientConfig
 {
     [ProtoMember(1)]
-    public int FarViewDistance = 4096;
+    public int FarViewDistance;
     [ProtoMember(2)]
-    public float SkyTint = 2.0f;
+    public float SkyTint;
     [ProtoMember(3)]
-    public float ColorTintR = 0.26f;
+    public float ColorTintR;
     [ProtoMember(4)]
-    public float ColorTintG = 0.29f;
+    public float ColorTintG;
     [ProtoMember(5)]
-    public float ColorTintB = 0.45f;
+    public float ColorTintB;
     [ProtoMember(6)]
-    public float ColorTintA = 0.25f;
+    public float ColorTintA;
     [ProtoMember(7)]
-    public float LightLevelBias = 0.55f;
+    public float LightLevelBias;
     [ProtoMember(8)]
-    public float FadeBias = 0.4f;
+    public float FadeBias;
+
+    public FarseerClientConfig()
+    {
+        Reset();
+    }
+
+    public void Reset()
+    {
+        FarViewDistance = 4096;
+        SkyTint = 2.0f;
+        ColorTintR = 0.26f;
+        ColorTintG = 0.29f;
+        ColorTintB = 0.45f;
+        ColorTintA = 0.25f;
+        LightLevelBias = 0.55f;
+        FadeBias = 0.4f;
+    }
 }
 
 public class FarseerServerConfig
@@ -31,4 +48,5 @@ public class FarseerServerConfig
     public int ChunkGenerationQueueThreshold = 512;
     [ProtoMember(3)]
     public int MaxClientViewDistance = 4096;
+
 }
