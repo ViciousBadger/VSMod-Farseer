@@ -1,5 +1,5 @@
 {
-  "title": "Farseer",
+  "config-title": "Farseer settings",
   "toggle-config": "Toggle Farseer settings window",
   "view-distance": "Far view distance",
   "sky-tint": "Sky tint",
@@ -8,6 +8,5 @@
   "color-tint-b": "Color tint (B)",
   "color-tint-a": "Color tint (A)",
   "light-level-bias": "Light level influence",
-  "fade-bias": "Fade bias",
-  "apply": "Apply changes"
+  "fade-bias": "Fade bias"
 }

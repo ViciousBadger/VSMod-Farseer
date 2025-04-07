@@ -8,7 +8,7 @@ public class FarseerConfigDialog : GuiDialog
 {
     FarseerModSystem modSystem;
 
-    bool dirty = false;
+    private long configSaveDelayListener = -1;
 
     public FarseerConfigDialog(FarseerModSystem modSystem, ICoreClientAPI capi) : base(capi)
     {
@@ -31,17 +31,13 @@ public class FarseerConfigDialog : GuiDialog
     {
         base.OnGuiClosed();
 
-        if (dirty)
-        {
-            modSystem.Client.SaveConfigChanges();
-            dirty = false;
-        }
+        CancelDebouncedSave();
+        modSystem.Client.SaveConfigChanges();
     }
-
 
     private void ComposeDialog()
     {
-        var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 25.0);
+        var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 30.0);
 
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.LeftMiddle).WithFixedAlignmentOffset(-GuiStyle.DialogToScreenPadding, 0);
         ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
@@ -50,8 +46,7 @@ public class FarseerConfigDialog : GuiDialog
         var composer =
         Composers["farseerconfig"] = capi.Gui.CreateCompo("farseerconfig", dialogBounds)
             .AddShadedDialogBG(bgBounds, true)
-            .AddDialogTitleBar(Lang.Get("farseer:title"), OnTitleBarClose)
-            // .BeginChildElements(dialogBounds)
+            .AddDialogTitleBar(Lang.Get("farseer:config-title"), OnTitleBarClose)
 
             .AddStaticText(Lang.Get("farseer:view-distance"), CairoFont.WhiteDetailText(), contentBounds)
             .AddSlider(OnChangeFarViewDistance, contentBounds = contentBounds.BelowCopy(), "farViewDistanceSlider")
@@ -75,9 +70,7 @@ public class FarseerConfigDialog : GuiDialog
             .AddSlider(OnChangeLightLevelBias, contentBounds = contentBounds.BelowCopy(), "lightLevelBiasSlider")
 
             .AddStaticText(Lang.Get("farseer:fade-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
-            .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider")
-
-            .AddButton(Lang.Get("farseer:apply"), OnApplyChanges, contentBounds = contentBounds.BelowCopy());
+            .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider");
 
         bgBounds.WithChildren(contentBounds);
 
@@ -95,68 +88,72 @@ public class FarseerConfigDialog : GuiDialog
         Composers["farseerconfig"] = composer;
     }
 
-    private bool OnApplyChanges()
-    {
-        if (dirty)
-        {
-            modSystem.Client.SaveConfigChanges();
-            dirty = false;
-        }
-        return true;
-    }
-
     private bool OnChangeFarViewDistance(int value)
     {
         modSystem.Client.Config.FarViewDistance = value;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
 
     private bool OnChangeSkyTint(int value)
     {
         modSystem.Client.Config.SkyTint = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeColorTintR(int value)
     {
         modSystem.Client.Config.ColorTintR = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeColorTintG(int value)
     {
         modSystem.Client.Config.ColorTintG = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeColorTintB(int value)
     {
         modSystem.Client.Config.ColorTintB = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeColorTintA(int value)
     {
         modSystem.Client.Config.ColorTintA = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeLightLevelBias(int value)
     {
         modSystem.Client.Config.LightLevelBias = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
     private bool OnChangeFadeBias(int value)
     {
         modSystem.Client.Config.FadeBias = value / 100f;
-        MarkDirty();
+        StartDebouncedSave();
         return true;
     }
 
-    private void MarkDirty()
+    private void StartDebouncedSave()
     {
-        dirty = true;
+        CancelDebouncedSave();
+        configSaveDelayListener = capi.Event.RegisterCallback((_) =>
+        {
+            modSystem.Client.SaveConfigChanges();
+            configSaveDelayListener = -1;
+        }, 1000);
+    }
+
+    private void CancelDebouncedSave()
+    {
+        if (configSaveDelayListener != -1)
+        {
+            capi.Event.UnregisterCallback(configSaveDelayListener);
+            configSaveDelayListener = -1;
+        }
     }
 }

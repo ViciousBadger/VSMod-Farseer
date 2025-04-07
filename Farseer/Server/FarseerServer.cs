@@ -15,6 +15,7 @@ public class FarseerServer : IDisposable
         public FarseerClientConfig ClientConfig { get; set; }
         public HashSet<long> RegionsInView { get; set; } = new();
         public HashSet<long> RegionsLoaded { get; set; } = new();
+        public Vec3i LastPos { get; set; } = null;
     }
 
     FarseerModSystem modSystem;
@@ -34,7 +35,7 @@ public class FarseerServer : IDisposable
         regionProvider.RegionReady += TryLoadRegionForPlayersInView;
 
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
-        sapi.Event.RegisterGameTickListener((_) => UpdateRegionsInView(), 7005, 2000);
+        sapi.Event.RegisterGameTickListener((_) => { if (AnyPlayerMovedRecently()) { UpdateRegionsInView(); } }, 7005, 2000);
         sapi.Event.RegisterGameTickListener((_) => PruneUnusedRegions(), 15002, 4000);
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
@@ -82,6 +83,33 @@ public class FarseerServer : IDisposable
         modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.ClientConfig.FarViewDistance);
 
         UpdateRegionsInView();
+    }
+
+    private bool AnyPlayerMovedRecently()
+    {
+        var anyPlayerMoved = false;
+        foreach (var player in playersWithFarsee.Values)
+        {
+            var oldPos = player.LastPos;
+            var newPos = player.ServerPlayer.Entity.ServerPos.XYZInt;
+
+            if (oldPos != null)
+            {
+                var dist = oldPos.DistanceTo(newPos);
+                if (dist > 128f)
+                {
+                    modSystem.Mod.Logger.Notification("{0} moved!!!", player.ServerPlayer.PlayerName);
+                    anyPlayerMoved = true;
+                }
+            }
+            else
+            {
+                anyPlayerMoved = true;
+            }
+
+            player.LastPos = newPos.Clone();
+        }
+        return anyPlayerMoved;
     }
 
     private void UpdateRegionsInView()
