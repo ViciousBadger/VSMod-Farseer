@@ -17,6 +17,8 @@ public class FarseerClient : IDisposable
 
     public FarseerClientConfig Config => config;
 
+    private long configSaveDelayListener = -1;
+
     public FarseerClient(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
         this.modSystem = modSystem;
@@ -62,6 +64,7 @@ public class FarseerClient : IDisposable
     public void SaveConfigChanges()
     {
         capi.StoreModConfig<FarseerClientConfig>(config, "farseer-client.json");
+
 
         // Re-initialize with any potential changes.
         Init();

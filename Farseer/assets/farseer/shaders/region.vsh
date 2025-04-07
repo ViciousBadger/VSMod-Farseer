@@ -33,11 +33,12 @@ void main()
     worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
     worldPos = applyGlobalWarping(worldPos);
 
-    float distStart = viewDistance * 0.80;
+    float distStart = viewDistance * 0.785;
     dist = (length(worldPos.xz) - distStart) / (farViewDistance - distStart - 512);
 
-    float chunkAlpha = clamp(17.0 - 20.0 * length(worldPos.xz) / viewDistance + max(0, worldPos.y / 50.0), 0, 1);
-    dist -= chunkAlpha;
+    // Makes the transition much less jank by forcing the far terrain into the
+    // ground at close range
+    worldPos.y -= max(0, mix(5, 0, dist*50));
 
     fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 

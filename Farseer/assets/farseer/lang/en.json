@@ -7,7 +7,7 @@
   "color-tint-g": "Color tint (G)",
   "color-tint-b": "Color tint (B)",
   "color-tint-a": "Color tint (A)",
-  "light-level-adjust": "Light level adjust",
+  "light-level-bias": "Light level influence",
   "fade-bias": "Fade bias",
   "apply": "Apply changes"
 }

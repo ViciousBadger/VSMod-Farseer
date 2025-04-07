@@ -15,7 +15,7 @@ uniform float dayLight;
 
 uniform float skyTint;
 uniform vec4 colorTint;
-uniform float lightLevelAdjust;
+uniform float lightLevelBias;
 uniform float fadeBias;
 
 layout(location = 0) out vec4 outColor;
@@ -30,6 +30,11 @@ layout(location = 3) out vec4 outGPosition;
 #include fogandlight.fsh
 #include skycolor.fsh
 #include underwatereffects.fsh
+
+float bias(float value, float bias) {
+  float exp = log(0.5) / log(bias);
+  return pow(value, exp);
+}
 
 void main()
 {
@@ -52,17 +57,17 @@ void main()
     skyGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
 
     //terraColor *= dayLight - (0.14 * (1-dist));
-    terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a * (1-dist));
-    terraColor *= dayLight + lightLevelAdjust;
+    //terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a * (1-dist));
+    terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a);
   	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
     terraColor = applyFog(terraColor, fogAmount);
     terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
     terraGlow *= dist;
 
-    float fade = min(1.0, dist * dist);
+    float fade = min(1.0, bias(dist, fadeBias));
     outColor = mix(terraColor, skyColor, fade);
+    outColor *= bias(clamp(dayLight, 0, 1), lightLevelBias);
     outGlow = mix(terraGlow, skyGlow, fade);
-
 
 #if SSAOLEVEL > 0
 	outGPosition = vec4(0);

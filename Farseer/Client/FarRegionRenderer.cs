@@ -286,7 +286,7 @@ public class FarRegionRenderer : IRenderer
 
             prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
             prog.Uniform("colorTint", colorTintVec);
-            prog.Uniform("lightLevelAdjust", modSystem.Client.Config.LightLevelAdjust);
+            prog.Uniform("lightLevelBias", modSystem.Client.Config.LightLevelBias);
             prog.Uniform("fadeBias", modSystem.Client.Config.FadeBias);
 
             prog.Uniform("viewDistance", viewDistance);

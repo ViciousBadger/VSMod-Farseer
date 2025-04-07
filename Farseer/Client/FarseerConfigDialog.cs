@@ -41,7 +41,7 @@ public class FarseerConfigDialog : GuiDialog
 
     private void ComposeDialog()
     {
-        var contentBounds = ElementBounds.Fixed(0.0, 25.0, 200.0, 20.0);
+        var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 25.0);
 
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.LeftMiddle).WithFixedAlignmentOffset(-GuiStyle.DialogToScreenPadding, 0);
         ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
@@ -71,8 +71,8 @@ public class FarseerConfigDialog : GuiDialog
             .AddStaticText(Lang.Get("farseer:color-tint-a"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeColorTintA, contentBounds = contentBounds.BelowCopy(), "colorTintASlider")
 
-            .AddStaticText(Lang.Get("farseer:light-level-adjust"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
-            .AddSlider(OnChangeLightLevelAdjust, contentBounds = contentBounds.BelowCopy(), "lightLevelAdjustSlider")
+            .AddStaticText(Lang.Get("farseer:light-level-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
+            .AddSlider(OnChangeLightLevelBias, contentBounds = contentBounds.BelowCopy(), "lightLevelBiasSlider")
 
             .AddStaticText(Lang.Get("farseer:fade-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider")
@@ -88,8 +88,8 @@ public class FarseerConfigDialog : GuiDialog
         composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1);
         composer.GetSlider("colorTintBSlider").SetValues((int)(config.ColorTintB * 100), 0, 100, 1);
         composer.GetSlider("colorTintASlider").SetValues((int)(config.ColorTintA * 100), 0, 100, 1);
-        composer.GetSlider("lightLevelAdjustSlider").SetValues((int)(config.LightLevelAdjust * 100), -100, 100, 1);
-        composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 0, 100, 1);
+        composer.GetSlider("lightLevelBiasSlider").SetValues((int)(config.LightLevelBias * 100), 1, 99, 1);
+        composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 1, 99, 1);
 
         composer.Compose();
         Composers["farseerconfig"] = composer;
@@ -142,9 +142,9 @@ public class FarseerConfigDialog : GuiDialog
         MarkDirty();
         return true;
     }
-    private bool OnChangeLightLevelAdjust(int value)
+    private bool OnChangeLightLevelBias(int value)
     {
-        modSystem.Client.Config.LightLevelAdjust = value / 100f;
+        modSystem.Client.Config.LightLevelBias = value / 100f;
         MarkDirty();
         return true;
     }
