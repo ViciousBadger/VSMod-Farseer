@@ -1,5 +1,4 @@
 using Vintagestory.API.Client;
-using Vintagestory.API.Common;
 using System;
 using Vintagestory.API.Config;
 
@@ -10,6 +9,7 @@ public class FarseerClient : IDisposable
     FarseerModSystem modSystem;
     ICoreClientAPI capi;
     FarseerClientConfig config;
+    FarseerClientConfig configOnLastLoad;
 
     FarRegionRenderer renderer;
 
@@ -42,6 +42,8 @@ public class FarseerClient : IDisposable
             config = new FarseerClientConfig();
         }
 
+        configOnLastLoad = config.Clone();
+
         this.renderer = new FarRegionRenderer(modSystem, capi);
         this.configDialog = new FarseerConfigDialog(modSystem, capi);
 
@@ -63,8 +65,21 @@ public class FarseerClient : IDisposable
     {
         capi.StoreModConfig<FarseerClientConfig>(config, "farseer-client.json");
 
-        // Re-initialize with any potential changes.
-        Init();
+        if (config.AnySharedSettingsChanged(configOnLastLoad))
+        {
+            // Should re-send view distance to server..
+            var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
+            if (channel != null)
+            {
+                channel.SendPacket(new FarEnableRequest
+                {
+                    PlayerConfig = config.ToSharedConfig(),
+                });
+            }
+            // .. and re-init renderer so that zfar is updated
+            renderer.Init();
+        }
+        configOnLastLoad = config.Clone();
     }
 
     private bool ToggleConfigDialog(KeyCombination _)
@@ -83,7 +98,6 @@ public class FarseerClient : IDisposable
         renderer.UnloadRegion(packet.RegionIndex);
     }
 
-
     public void Init()
     {
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
@@ -91,7 +105,7 @@ public class FarseerClient : IDisposable
         {
             channel.SendPacket(new FarEnableRequest
             {
-                ClientConfig = config,
+                PlayerConfig = config.ToSharedConfig(),
             });
         }
         renderer.Init();

@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
-using Vintagestory.Server;
 
 namespace Farseer;
 
@@ -126,58 +124,50 @@ public class FarRegionGen
 
     private void LoadNextFarChunksInQueue()
     {
-        //int chunkQueueLimit = (int)(MagicNum.RequestChunkColumnsQueueSize * modSystem.Server.Config.ChunkQueueThreshold); // Leave space for vanilla chunk gen..
+        // To avoid lag and other weird behaviour, we don't try to generate
+        // anything if the game is already working on any chunks at all.
+        if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > 0) return;
+        modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
 
-        var threshold = modSystem.Server.Config.ChunkGenerationQueueThreshold;
-        var regionsToPushToQueue = GameMath.Clamp((threshold - sapi.WorldManager.CurrentGeneratingChunkCount) / chunksInRegionArea, 0, regionGenerationQueue.Count);
+        var nextRegionInQueue = regionGenerationQueue[0];
 
-        for (var i = 0; i < regionsToPushToQueue; i++)
+        var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(nextRegionInQueue.RegionIdx);
+        var chunkStartX = regionPos.X * chunksInRegionColumn;
+        var chunkStartZ = regionPos.Z * chunksInRegionColumn;
+
+        for (int z = 0; z < chunksInRegionColumn; z++)
         {
-            var inProgressRegion = regionGenerationQueue[i];
-
-            var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(inProgressRegion.RegionIdx);
-            var chunkStartX = regionPos.X * chunksInRegionColumn;
-            var chunkStartZ = regionPos.Z * chunksInRegionColumn;
-
-            for (int z = 0; z < chunksInRegionColumn; z++)
+            for (int x = 0; x < chunksInRegionColumn; x++)
             {
-                for (int x = 0; x < chunksInRegionColumn; x++)
-                {
-                    int targetChunkX = chunkStartX + x;
-                    int targetChunkZ = chunkStartZ + z;
-                    var targetChunkIdx = sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ);
+                int targetChunkX = chunkStartX + x;
+                int targetChunkZ = chunkStartZ + z;
+                var targetChunkIdx = sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ);
 
-                    if (!peekWaiting.Contains(targetChunkIdx) && !inProgressRegion.FinishedChunks.Contains(targetChunkIdx))
+                if (!peekWaiting.Contains(targetChunkIdx) && !nextRegionInQueue.FinishedChunks.Contains(targetChunkIdx))
+                {
+                    // Test if the chunk exists first. It's faster to load
+                    // existing chunks than to peek. (Peek ignores saved data)
+                    sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
                     {
-                        // Test if the chunk exists first. It's faster to load
-                        // existing chunks than to peek. (Peek ignores saved data)
-                        sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
+                        if (exists)
                         {
-                            if (exists)
+                            sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                        }
+                        else
+                        {
+                            // It seems peek is about ~20-60% faster than
+                            // full chunk generation and less taxing on the
+                            // server (not to mention disk space)
+                            sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
                             {
-                                sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
-                            }
-                            else
-                            {
-                                // It seems peek is about ~20-60% faster than
-                                // full chunk generation and less taxing on the
-                                // server (not to mention disk space)
-                                sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
-                                {
-                                    UntilPass = EnumWorldGenPass.Terrain,
-                                    OnGenerated = OnChunkColumnPeeked,
-                                });
-                                peekWaiting.Add(targetChunkIdx);
-                            }
-                        });
-                    }
+                                UntilPass = EnumWorldGenPass.Terrain,
+                                OnGenerated = OnChunkColumnPeeked,
+                            });
+                            peekWaiting.Add(targetChunkIdx);
+                        }
+                    });
                 }
             }
-        }
-
-        if (regionsToPushToQueue > 0)
-        {
-            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
         }
     }
 

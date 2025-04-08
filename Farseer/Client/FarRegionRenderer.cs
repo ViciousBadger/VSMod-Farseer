@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
-using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
-using Vintagestory.Server;
 
 namespace Farseer;
 
@@ -50,19 +48,14 @@ public class FarRegionRenderer : IRenderer
 
     public void Init()
     {
-        ClearLoadedRegions();
+        var farViewDistance = GameMath.Max(3000f, modSystem.Client.Config.FarViewDistance);
+        var clientMain = ((ClientMain)capi.World);
+        var mainCam = clientMain.MainCamera;
 
-        var farViewDistance = modSystem.Client.Config.FarViewDistance;
-        if (farViewDistance > 3000f)
-        {
-            var clientMain = ((ClientMain)capi.World);
-            var mainCam = clientMain.MainCamera;
+        var prop = mainCam.GetType().GetField("ZFar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        prop.SetValue(mainCam, farViewDistance);
 
-            var prop = mainCam.GetType().GetField("ZFar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            prop.SetValue(mainCam, farViewDistance);
-
-            capi.Render.Reset3DProjection();
-        }
+        capi.Render.Reset3DProjection();
     }
 
     public bool LoadShader()

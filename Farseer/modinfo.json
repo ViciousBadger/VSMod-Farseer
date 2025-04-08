@@ -6,7 +6,7 @@
     "Badgerson"
   ],
   "description": "Draws silhouettes of the terrain outside of your view distance",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "dependencies": {
     "game": "1.20.0"
   },

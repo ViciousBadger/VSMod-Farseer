@@ -1,4 +1,3 @@
-using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 
@@ -80,7 +79,7 @@ public class FarseerConfigDialog : GuiDialog
 
         var config = modSystem.Client.Config;
         composer.GetSlider("farViewDistanceSlider").SetValues(config.FarViewDistance, 512, 16384, 512);
-        composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 300, 1);
+        composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 1000, 10);
         composer.GetSlider("colorTintRSlider").SetValues((int)(config.ColorTintR * 100), 0, 100, 1);
         composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1);
         composer.GetSlider("colorTintBSlider").SetValues((int)(config.ColorTintB * 100), 0, 100, 1);

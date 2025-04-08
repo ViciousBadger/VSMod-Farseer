@@ -6,7 +6,7 @@ namespace Farseer;
 public class FarEnableRequest
 {
     [ProtoMember(1)]
-    public FarseerClientConfig ClientConfig;
+    public FarseerSharedPlayerConfig PlayerConfig;
 }
 
 [ProtoContract]

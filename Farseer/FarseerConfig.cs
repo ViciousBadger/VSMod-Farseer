@@ -2,24 +2,15 @@ using ProtoBuf;
 
 namespace Farseer;
 
-[ProtoContract]
 public class FarseerClientConfig
 {
-    [ProtoMember(1)]
     public int FarViewDistance;
-    [ProtoMember(2)]
     public float SkyTint;
-    [ProtoMember(3)]
     public float ColorTintR;
-    [ProtoMember(4)]
     public float ColorTintG;
-    [ProtoMember(5)]
     public float ColorTintB;
-    [ProtoMember(6)]
     public float ColorTintA;
-    [ProtoMember(7)]
     public float LightLevelBias;
-    [ProtoMember(8)]
     public float FadeBias;
 
     public FarseerClientConfig()
@@ -30,23 +21,53 @@ public class FarseerClientConfig
     public void Reset()
     {
         FarViewDistance = 4096;
-        SkyTint = 2.0f;
+        SkyTint = 3.0f;
         ColorTintR = 0.26f;
         ColorTintG = 0.29f;
         ColorTintB = 0.45f;
-        ColorTintA = 0.25f;
-        LightLevelBias = 0.55f;
+        ColorTintA = 0.40f;
+        LightLevelBias = 0.70f;
         FadeBias = 0.4f;
     }
+
+    public FarseerClientConfig Clone()
+    {
+        return new FarseerClientConfig()
+        {
+            FarViewDistance = FarViewDistance,
+            SkyTint = SkyTint,
+            ColorTintR = ColorTintR,
+            ColorTintG = ColorTintG,
+            ColorTintB = ColorTintB,
+            ColorTintA = ColorTintA,
+            LightLevelBias = LightLevelBias,
+            FadeBias = FadeBias
+        };
+    }
+
+    public bool AnySharedSettingsChanged(FarseerClientConfig before)
+    {
+        return FarViewDistance != before.FarViewDistance;
+    }
+
+    public FarseerSharedPlayerConfig ToSharedConfig()
+    {
+        return new FarseerSharedPlayerConfig()
+        {
+            FarViewDistance = FarViewDistance
+        };
+    }
+}
+
+[ProtoContract]
+public class FarseerSharedPlayerConfig
+{
+    [ProtoMember(1)]
+    public int FarViewDistance;
 }
 
 public class FarseerServerConfig
 {
-    [ProtoMember(1)]
     public int HeightmapGridSize = 128;
-    [ProtoMember(2)]
-    public int ChunkGenerationQueueThreshold = 512;
-    [ProtoMember(3)]
     public int MaxClientViewDistance = 4096;
-
 }

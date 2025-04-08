@@ -1,5 +1,4 @@
 using Vintagestory.API.Server;
-using Vintagestory.API.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,7 +11,7 @@ public class FarseerServer : IDisposable
     public class FarseePlayer
     {
         public IServerPlayer ServerPlayer { get; set; }
-        public FarseerClientConfig ClientConfig { get; set; }
+        public FarseerSharedPlayerConfig PlayerConfig { get; set; }
         public HashSet<long> RegionsInView { get; set; } = new();
         public HashSet<long> RegionsLoaded { get; set; } = new();
         public Vec3i LastPos { get; set; } = null;
@@ -61,26 +60,30 @@ public class FarseerServer : IDisposable
 
     private void EnableFarseeForPlayer(IServerPlayer fromPlayer, FarEnableRequest request)
     {
-        if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
+        if (sapi.Server.IsDedicated)
         {
-            // Assume that the player changed their config. Should clear and re-send regions.
-            player.ClientConfig = request.ClientConfig;
-            player.RegionsInView.Clear();
-            player.RegionsLoaded.Clear();
+            request.PlayerConfig.FarViewDistance = GameMath.Min(request.PlayerConfig.FarViewDistance, config.MaxClientViewDistance);
         }
         else
         {
-            if (sapi.Server.IsDedicated)
-            {
-                request.ClientConfig.FarViewDistance = GameMath.Min(request.ClientConfig.FarViewDistance, config.MaxClientViewDistance);
-            }
-            else
-            {
-                modSystem.Mod.Logger.Chat("Running locally, no view distance limit enforced.");
-            }
-            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, ClientConfig = request.ClientConfig });
+            modSystem.Mod.Logger.Chat("Running locally, no view distance limit enforced.");
         }
-        modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.ClientConfig.FarViewDistance);
+
+        if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
+        {
+            // Happens when players change their client-side config.
+            player.PlayerConfig = request.PlayerConfig;
+            //player.RegionsInView.Clear();
+            //player.RegionsLoaded.Clear();
+            //
+            modSystem.Mod.Logger.Chat("Player {0} changed their client settings (new view distance {1})", fromPlayer.PlayerName, request.PlayerConfig.FarViewDistance);
+        }
+        else
+        {
+            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, PlayerConfig = request.PlayerConfig });
+
+            modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.PlayerConfig.FarViewDistance);
+        }
 
         UpdateRegionsInView();
     }
@@ -213,7 +216,7 @@ public class FarseerServer : IDisposable
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
         // modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
 
-        int farViewDistanceInRegions = (player.ClientConfig.FarViewDistance / sapi.WorldManager.RegionSize) + 1;
+        int farViewDistanceInRegions = (player.PlayerConfig.FarViewDistance / sapi.WorldManager.RegionSize) + 1;
 
         var result = new HashSet<long>();
 
