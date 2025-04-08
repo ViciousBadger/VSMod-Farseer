@@ -6,14 +6,14 @@ namespace Farseer;
 public class FarEnableRequest
 {
     [ProtoMember(1)]
-    public FarseerSharedPlayerConfig PlayerConfig;
+    public FarseerServerPlayerConfig PlayerConfig;
 }
 
 [ProtoContract]
 public class FarRegionUnload
 {
     [ProtoMember(1)]
-    public long RegionIndex;
+    public long[] RegionIndices;
 }
 
 [ProtoContract]

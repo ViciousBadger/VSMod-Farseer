@@ -65,21 +65,26 @@ public class FarseerClient : IDisposable
     {
         capi.StoreModConfig<FarseerClientConfig>(config, "farseer-client.json");
 
-        if (config.AnySharedSettingsChanged(configOnLastLoad))
+        if (config.ShouldShareWithServer(configOnLastLoad))
         {
-            // Should re-send view distance to server..
             var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
             if (channel != null)
             {
                 channel.SendPacket(new FarEnableRequest
                 {
-                    PlayerConfig = config.ToSharedConfig(),
+                    PlayerConfig = config.ToServerPlayerConfig(),
                 });
             }
-            // .. and re-init renderer so that zfar is updated
+        }
+
+        if (config.FarViewDistance != configOnLastLoad.FarViewDistance)
+        {
+            // re-init renderer so that zfar is updated
             renderer.Init();
         }
+
         configOnLastLoad = config.Clone();
+        modSystem.Mod.Logger.Notification("Saved client config changes.");
     }
 
     private bool ToggleConfigDialog(KeyCombination _)
@@ -95,7 +100,10 @@ public class FarseerClient : IDisposable
 
     private void OnRecieveFarRegionUnload(FarRegionUnload packet)
     {
-        renderer.UnloadRegion(packet.RegionIndex);
+        foreach (var idx in packet.RegionIndices)
+        {
+            renderer.UnloadRegion(idx);
+        }
     }
 
     public void Init()
@@ -105,7 +113,7 @@ public class FarseerClient : IDisposable
         {
             channel.SendPacket(new FarEnableRequest
             {
-                PlayerConfig = config.ToSharedConfig(),
+                PlayerConfig = config.ToServerPlayerConfig(),
             });
         }
         renderer.Init();

@@ -11,7 +11,7 @@ public class FarseerServer : IDisposable
     public class FarseePlayer
     {
         public IServerPlayer ServerPlayer { get; set; }
-        public FarseerSharedPlayerConfig PlayerConfig { get; set; }
+        public FarseerServerPlayerConfig PlayerConfig { get; set; }
         public HashSet<long> RegionsInView { get; set; } = new();
         public HashSet<long> RegionsLoaded { get; set; } = new();
         public Vec3i LastPos { get; set; } = null;
@@ -20,6 +20,7 @@ public class FarseerServer : IDisposable
     FarseerModSystem modSystem;
     ICoreServerAPI sapi;
     FarseerServerConfig config;
+    BatchedRegionDataBuffer regionSendBuffer;
 
     FarRegionProvider regionProvider;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarsee = new Dictionary<IServerPlayer, FarseePlayer>();
@@ -31,11 +32,13 @@ public class FarseerServer : IDisposable
         this.modSystem = modSystem;
         this.sapi = sapi;
         this.regionProvider = new FarRegionProvider(this.modSystem, sapi);
-        regionProvider.RegionReady += TryLoadRegionForPlayersInView;
+        regionProvider.RegionReady += LoadRegionForPlayersInView;
+        this.regionSendBuffer = new(modSystem, sapi, 8);
 
         sapi.Event.PlayerDisconnect += OnPlayerDisconnect;
         sapi.Event.RegisterGameTickListener((_) => { if (AnyPlayerMovedRecently()) { UpdateRegionsInView(); } }, 7005, 2000);
         sapi.Event.RegisterGameTickListener((_) => PruneUnusedRegions(), 15002, 4000);
+        sapi.Event.RegisterGameTickListener((_) => regionSendBuffer.SendNextBatch(), 302, 1000);
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
@@ -146,44 +149,45 @@ public class FarseerServer : IDisposable
                 // Start loading this region - will be sent to the player once
                 // it's ready, as long as it's still in view.
                 regionProvider.LoadRegion(newRegion);
-
-                //LoadRegionForPlayer(player.Key, newRegion);
             }
 
-            foreach (var lostRegion in GetRegionsNoLongerInView(regionsInViewBefore, regionsInViewNow))
+            var toUnload = GetRegionsNoLongerInView(regionsInViewBefore, regionsInViewNow).Where(regionIdx => player.RegionsLoaded.Contains(regionIdx)).ToArray();
+            if (toUnload.Length > 0)
             {
-                if (player.RegionsLoaded.Contains(lostRegion))
-                {
-                    UnloadRegionForPlayer(player, lostRegion);
-                }
+                UnloadRegionsForPlayer(player, toUnload);
             }
         }
         regionProvider.Reprioritize(regionPrioritiesCombined);
     }
 
-    private void TryLoadRegionForPlayersInView(FarRegionData regionData)
+    private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
-        foreach (var player in playersWithFarsee.Values)
+        var relevantPlayers = playersWithFarsee.Values
+            .Where(
+                    player => player.RegionsInView.Contains(regionData.RegionIndex) &&
+                    !player.RegionsLoaded.Contains(regionData.RegionIndex)
+                  );
+
+        if (relevantPlayers.Any())
         {
-            if (player.RegionsInView.Contains(regionData.RegionIndex) && !player.RegionsLoaded.Contains(regionData.RegionIndex))
+            regionSendBuffer.Insert(regionData, relevantPlayers.Select(p => p.ServerPlayer).ToArray());
+            foreach (var player in relevantPlayers)
             {
-                LoadRegionForPlayer(player, regionData);
+                player.RegionsLoaded.Add(regionData.RegionIndex);
             }
         }
     }
 
-    private void LoadRegionForPlayer(FarseePlayer player, FarRegionData regionData)
+    private void UnloadRegionsForPlayer(FarseePlayer player, long[] regionIndices)
     {
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SendPacket(regionData, player.ServerPlayer);
-        player.RegionsLoaded.Add(regionData.RegionIndex);
-    }
-
-    private void UnloadRegionForPlayer(FarseePlayer player, long regionIdx)
-    {
-        var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SendPacket(new FarRegionUnload { RegionIndex = regionIdx }, player.ServerPlayer);
-        player.RegionsLoaded.Remove(regionIdx);
+        channel.SendPacket(new FarRegionUnload { RegionIndices = regionIndices }, player.ServerPlayer);
+        foreach (var idx in regionIndices)
+        {
+            player.RegionsLoaded.Remove(idx);
+            regionSendBuffer.CancelForTarget(idx, player.ServerPlayer);
+        }
+        // modSystem.Mod.Logger.Notification("Unload {0} regions for {1}.", regionIndices.Length, player.ServerPlayer.PlayerName);
     }
 
     private void PruneUnusedRegions()

@@ -38,7 +38,7 @@ float bias(float value, float bias) {
 
 void main()
 {
-    if (dist < 0.0) discard;
+    if (dist < 0.0 || dist > 1.0) discard;
 
     // Sample sky with special parameters for terrain color.
     vec4 terraColor = vec4(1);

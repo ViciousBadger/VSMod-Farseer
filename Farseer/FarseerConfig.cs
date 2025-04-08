@@ -45,14 +45,14 @@ public class FarseerClientConfig
         };
     }
 
-    public bool AnySharedSettingsChanged(FarseerClientConfig before)
+    public bool ShouldShareWithServer(FarseerClientConfig before)
     {
         return FarViewDistance != before.FarViewDistance;
     }
 
-    public FarseerSharedPlayerConfig ToSharedConfig()
+    public FarseerServerPlayerConfig ToServerPlayerConfig()
     {
-        return new FarseerSharedPlayerConfig()
+        return new FarseerServerPlayerConfig()
         {
             FarViewDistance = FarViewDistance
         };
@@ -60,7 +60,7 @@ public class FarseerClientConfig
 }
 
 [ProtoContract]
-public class FarseerSharedPlayerConfig
+public class FarseerServerPlayerConfig
 {
     [ProtoMember(1)]
     public int FarViewDistance;
