@@ -21,7 +21,7 @@ public class FarseerClientConfig
     public void Reset()
     {
         FarViewDistance = 4096;
-        SkyTint = 3.0f;
+        SkyTint = 5.0f;
         ColorTintR = 0.26f;
         ColorTintG = 0.29f;
         ColorTintB = 0.45f;
