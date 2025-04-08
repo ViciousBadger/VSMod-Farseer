@@ -18,10 +18,10 @@ public class FarseerConfigDialog : GuiDialog
     {
         this.modSystem = modSystem;
 
-        // if (!capi.IsSinglePlayer)
-        // {
-        maxFarViewDistanceOnServer = capi.World.Config.GetInt("maxFarViewDistance");
-        // }
+        if (!capi.IsSinglePlayer)
+        {
+            maxFarViewDistanceOnServer = capi.World.Config.GetInt("maxFarViewDistance");
+        }
     }
 
     public override string ToggleKeyCombinationCode => null;
