@@ -1,5 +1,6 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 
 namespace Farseer;
 
@@ -11,9 +12,16 @@ public class FarseerConfigDialog : GuiDialog
 
     private long configSaveDelayListener = -1;
 
+    int maxFarViewDistanceOnServer = 0;
+
     public FarseerConfigDialog(FarseerModSystem modSystem, ICoreClientAPI capi) : base(capi)
     {
         this.modSystem = modSystem;
+
+        // if (!capi.IsSinglePlayer)
+        // {
+        maxFarViewDistanceOnServer = capi.World.Config.GetInt("maxFarViewDistance");
+        // }
     }
 
     public override string ToggleKeyCombinationCode => null;
@@ -77,23 +85,27 @@ public class FarseerConfigDialog : GuiDialog
 
         bgBounds.WithChildren(contentBounds);
 
-        ReadSliders();
-
         composer.Compose();
         Composers["farseerconfig"] = composer;
+
+        ReadSliders();
     }
 
     private void ReadSliders()
     {
         var config = modSystem.Client.Config;
-        composer.GetSlider("farViewDistanceSlider").SetValues(config.FarViewDistance, 512, 16384, 512);
-        composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 1000, 10);
-        composer.GetSlider("colorTintRSlider").SetValues((int)(config.ColorTintR * 100), 0, 100, 1);
-        composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1);
-        composer.GetSlider("colorTintBSlider").SetValues((int)(config.ColorTintB * 100), 0, 100, 1);
-        composer.GetSlider("colorTintASlider").SetValues((int)(config.ColorTintA * 100), 0, 100, 1);
-        composer.GetSlider("lightLevelBiasSlider").SetValues((int)(config.LightLevelBias * 100), 1, 99, 1);
-        composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 1, 99, 1);
+        composer.GetSlider("farViewDistanceSlider").SetValues(config.FarViewDistance, 512, 16384, 512, " blocks");
+        if (maxFarViewDistanceOnServer != 0)
+        {
+            composer.GetSlider("farViewDistanceSlider").SetAlarmValue(maxFarViewDistanceOnServer);
+        }
+        composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 1000, 10, "%");
+        composer.GetSlider("colorTintRSlider").SetValues((int)(config.ColorTintR * 100), 0, 100, 1, "%");
+        composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1, "%");
+        composer.GetSlider("colorTintBSlider").SetValues((int)(config.ColorTintB * 100), 0, 100, 1, "%");
+        composer.GetSlider("colorTintASlider").SetValues((int)(config.ColorTintA * 100), 0, 100, 1, "%");
+        composer.GetSlider("lightLevelBiasSlider").SetValues((int)(config.LightLevelBias * 100), 1, 99, 1, "%");
+        composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 1, 99, 1, "%");
     }
 
     private bool ResetConfig()
@@ -106,6 +118,14 @@ public class FarseerConfigDialog : GuiDialog
 
     private bool OnChangeFarViewDistance(int value)
     {
+        if (maxFarViewDistanceOnServer != 0)
+        {
+            if (value > maxFarViewDistanceOnServer)
+            {
+                composer.GetSlider("farViewDistanceSlider").SetValues(maxFarViewDistanceOnServer, 512, 16384, 512, " blocks");
+            }
+            value = GameMath.Min(value, maxFarViewDistanceOnServer);
+        }
         modSystem.Client.Config.FarViewDistance = value;
         StartDebouncedSave();
         return true;

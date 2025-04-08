@@ -124,9 +124,7 @@ public class FarRegionGen
 
     private void LoadNextFarChunksInQueue()
     {
-        // To avoid lag and other weird behaviour, we don't try to generate
-        // anything if the game is already working on any chunks at all.
-        if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > 0) return;
+        if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > modSystem.Server.Config.ChunkGenQueueThreshold) return;
         modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
 
         var nextRegionInQueue = regionGenerationQueue[0];

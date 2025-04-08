@@ -65,7 +65,7 @@ public class BatchedRegionDataBuffer
             {
                 channel.SendPacket(packet.RegionData, packet.Targets);
             }
-            // logger.Notification("send data to {0} targets", packet.Targets.Length);
+            // modSystem.Mod.Logger.Notification("send region {0} to {1} targets", packet.RegionData.RegionIndex, packet.Targets.Length);
         }
     }
 }

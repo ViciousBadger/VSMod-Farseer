@@ -59,6 +59,7 @@ public class FarseerServer : IDisposable
             this.modSystem.Mod.Logger.Error(e);
             config = new FarseerServerConfig();
         }
+        sapi.World.Config.SetInt("maxFarViewDistance", config.MaxClientViewDistance);
     }
 
     private void EnableFarseeForPlayer(IServerPlayer fromPlayer, FarEnableRequest request)
@@ -162,6 +163,7 @@ public class FarseerServer : IDisposable
 
     private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
+        // modSystem.Mod.Logger.Notification("load {0} for players in view", regionData.RegionIndex);
         var relevantPlayers = playersWithFarsee.Values
             .Where(
                     player => player.RegionsInView.Contains(regionData.RegionIndex) &&
@@ -170,11 +172,16 @@ public class FarseerServer : IDisposable
 
         if (relevantPlayers.Any())
         {
+            // modSystem.Mod.Logger.Notification("send {0} to {1}.....", regionData.RegionIndex, relevantPlayers.Count());
             regionSendBuffer.Insert(regionData, relevantPlayers.Select(p => p.ServerPlayer).ToArray());
             foreach (var player in relevantPlayers)
             {
                 player.RegionsLoaded.Add(regionData.RegionIndex);
             }
+        }
+        else
+        {
+            // modSystem.Mod.Logger.Notification("no players found.....");
         }
     }
 
