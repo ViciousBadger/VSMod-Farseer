@@ -60,13 +60,13 @@ void main()
     //terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a * (1-dist));
     terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a);
   	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
+    terraColor *= bias(clamp(dayLight, 0, 1), lightLevelBias);
     terraColor = applyFog(terraColor, fogAmount);
     terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
     terraGlow *= dist;
 
     float fade = min(1.0, bias(dist, fadeBias));
     outColor = mix(terraColor, skyColor, fade);
-    outColor *= bias(clamp(dayLight, 0, 1), lightLevelBias);
     outGlow = mix(terraGlow, skyGlow, fade);
 
 #if SSAOLEVEL > 0
