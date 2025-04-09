@@ -1,3 +1,4 @@
+using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
@@ -46,7 +47,7 @@ public class FarseerConfigDialog : GuiDialog
 
     private void ComposeDialog()
     {
-        var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 30.0);
+        var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 26.0);
 
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.LeftMiddle).WithFixedAlignmentOffset(-GuiStyle.DialogToScreenPadding, 0);
         ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
@@ -57,7 +58,10 @@ public class FarseerConfigDialog : GuiDialog
             .AddShadedDialogBG(bgBounds, true)
             .AddDialogTitleBar(Lang.Get("farseer:config-title"), OnTitleBarClose)
 
-            .AddStaticText(Lang.Get("farseer:view-distance"), CairoFont.WhiteDetailText(), contentBounds)
+            .AddStaticText(Lang.Get("farseer:enabled"), CairoFont.WhiteDetailText(), contentBounds)
+            .AddSwitch(OnToggleEnabled, ElementBounds.Fixed(-26, 45, 26, 26).WithAlignment(EnumDialogArea.RightTop), "toggleEnabled")
+
+            .AddStaticText(Lang.Get("farseer:view-distance"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFarViewDistance, contentBounds = contentBounds.BelowCopy(), "farViewDistanceSlider")
 
             .AddStaticText(Lang.Get("farseer:sky-tint"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
@@ -81,19 +85,20 @@ public class FarseerConfigDialog : GuiDialog
             .AddStaticText(Lang.Get("farseer:fade-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider")
 
-            .AddButton(Lang.Get("farseer:reset"), ResetConfig, contentBounds = contentBounds.BelowCopy(0.0, 20.0), EnumButtonStyle.Small);
+            .AddButton(Lang.Get("farseer:reset"), ResetConfig, contentBounds = contentBounds.BelowCopy(0.0, 20.0));
 
         bgBounds.WithChildren(contentBounds);
 
         composer.Compose();
         Composers["farseerconfig"] = composer;
 
-        ReadSliders();
+        ReadConfigValues();
     }
 
-    private void ReadSliders()
+    private void ReadConfigValues()
     {
         var config = modSystem.Client.Config;
+        composer.GetSwitch("toggleEnabled").SetValue(config.Enabled);
         composer.GetSlider("farViewDistanceSlider").SetValues(config.FarViewDistance, 512, 16384, 512, " blocks");
         if (maxFarViewDistanceOnServer != 0)
         {
@@ -112,20 +117,18 @@ public class FarseerConfigDialog : GuiDialog
     {
         modSystem.Client.Config.Reset();
         modSystem.Client.SaveConfigChanges();
-        ReadSliders();
+        ReadConfigValues();
         return true;
+    }
+
+    private void OnToggleEnabled(bool value)
+    {
+        modSystem.Client.Config.Enabled = value;
+        StartDebouncedSave();
     }
 
     private bool OnChangeFarViewDistance(int value)
     {
-        if (maxFarViewDistanceOnServer != 0)
-        {
-            if (value > maxFarViewDistanceOnServer)
-            {
-                composer.GetSlider("farViewDistanceSlider").SetValues(maxFarViewDistanceOnServer, 512, 16384, 512, " blocks");
-            }
-            value = GameMath.Min(value, maxFarViewDistanceOnServer);
-        }
         modSystem.Client.Config.FarViewDistance = value;
         StartDebouncedSave();
         return true;

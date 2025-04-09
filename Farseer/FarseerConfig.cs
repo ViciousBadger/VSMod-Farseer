@@ -4,6 +4,7 @@ namespace Farseer;
 
 public class FarseerClientConfig
 {
+    public bool Enabled;
     public int FarViewDistance;
     public float SkyTint;
     public float ColorTintR;
@@ -20,6 +21,7 @@ public class FarseerClientConfig
 
     public void Reset()
     {
+        Enabled = true;
         FarViewDistance = 4096;
         SkyTint = 5.0f;
         ColorTintR = 0.26f;
@@ -32,22 +34,12 @@ public class FarseerClientConfig
 
     public FarseerClientConfig Clone()
     {
-        return new FarseerClientConfig()
-        {
-            FarViewDistance = FarViewDistance,
-            SkyTint = SkyTint,
-            ColorTintR = ColorTintR,
-            ColorTintG = ColorTintG,
-            ColorTintB = ColorTintB,
-            ColorTintA = ColorTintA,
-            LightLevelBias = LightLevelBias,
-            FadeBias = FadeBias
-        };
+        return (FarseerClientConfig)this.MemberwiseClone();
     }
 
     public bool ShouldShareWithServer(FarseerClientConfig before)
     {
-        return FarViewDistance != before.FarViewDistance;
+        return FarViewDistance != before.FarViewDistance || Enabled != before.Enabled;
     }
 
     public FarseerServerPlayerConfig ToServerPlayerConfig()

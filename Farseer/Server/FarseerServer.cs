@@ -23,7 +23,7 @@ public class FarseerServer : IDisposable
     BatchedRegionDataBuffer regionSendBuffer;
 
     FarRegionProvider regionProvider;
-    Dictionary<IServerPlayer, FarseePlayer> playersWithFarsee = new Dictionary<IServerPlayer, FarseePlayer>();
+    Dictionary<IServerPlayer, FarseePlayer> playersWithFarseer = new Dictionary<IServerPlayer, FarseePlayer>();
 
     public FarseerServerConfig Config => config;
 
@@ -41,7 +41,8 @@ public class FarseerServer : IDisposable
         sapi.Event.RegisterGameTickListener((_) => regionSendBuffer.SendNextBatch(), 302, 1000);
 
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SetMessageHandler<FarEnableRequest>(EnableFarseeForPlayer);
+        channel.SetMessageHandler<FarseerEnable>(EnableForPlayer);
+        channel.SetMessageHandler<FarseerDisable>(DisableForPlayer);
 
         try
         {
@@ -62,7 +63,7 @@ public class FarseerServer : IDisposable
         sapi.World.Config.SetInt("maxFarViewDistance", config.MaxClientViewDistance);
     }
 
-    private void EnableFarseeForPlayer(IServerPlayer fromPlayer, FarEnableRequest request)
+    private void EnableForPlayer(IServerPlayer fromPlayer, FarseerEnable request)
     {
         if (sapi.Server.IsDedicated)
         {
@@ -73,7 +74,7 @@ public class FarseerServer : IDisposable
             modSystem.Mod.Logger.Chat("Running locally, no view distance limit enforced.");
         }
 
-        if (playersWithFarsee.TryGetValue(fromPlayer, out FarseePlayer player))
+        if (playersWithFarseer.TryGetValue(fromPlayer, out FarseePlayer player))
         {
             // Happens when players change their client-side config.
             player.PlayerConfig = request.PlayerConfig;
@@ -84,7 +85,7 @@ public class FarseerServer : IDisposable
         }
         else
         {
-            playersWithFarsee.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, PlayerConfig = request.PlayerConfig });
+            playersWithFarseer.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, PlayerConfig = request.PlayerConfig });
 
             modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.PlayerConfig.FarViewDistance);
         }
@@ -92,10 +93,23 @@ public class FarseerServer : IDisposable
         UpdateRegionsInView();
     }
 
+    private void DisableForPlayer(IServerPlayer fromPlayer, FarseerDisable packet)
+    {
+        if (playersWithFarseer.ContainsKey(fromPlayer))
+        {
+            playersWithFarseer.Remove(fromPlayer);
+
+            // Might as well cancel then
+            regionSendBuffer.CancelAllForTarget(fromPlayer);
+
+            modSystem.Mod.Logger.Chat("Disabled for player {0}", fromPlayer.PlayerName);
+        }
+    }
+
     private bool AnyPlayerMovedRecently()
     {
         var anyPlayerMoved = false;
-        foreach (var player in playersWithFarsee.Values)
+        foreach (var player in playersWithFarseer.Values)
         {
             var oldPos = player.LastPos;
             var newPos = player.ServerPlayer.Entity.ServerPos.XYZInt;
@@ -123,7 +137,7 @@ public class FarseerServer : IDisposable
         // Select highest priority for each region.
         var regionPrioritiesCombined = new Dictionary<long, int>();
 
-        foreach (var player in playersWithFarsee.Values)
+        foreach (var player in playersWithFarseer.Values)
         {
             var regionsInViewNow = GetRegionsInViewOfPlayer(player, out Dictionary<long, int> regionPrioritiesForPlayer);
             var regionsInViewBefore = player.RegionsInView;
@@ -164,7 +178,7 @@ public class FarseerServer : IDisposable
     private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
         // modSystem.Mod.Logger.Notification("load {0} for players in view", regionData.RegionIndex);
-        var relevantPlayers = playersWithFarsee.Values
+        var relevantPlayers = playersWithFarseer.Values
             .Where(
                     player => player.RegionsInView.Contains(regionData.RegionIndex) &&
                     !player.RegionsLoaded.Contains(regionData.RegionIndex)
@@ -200,7 +214,7 @@ public class FarseerServer : IDisposable
     private void PruneUnusedRegions()
     {
         var regionsToKeep = new HashSet<long>();
-        foreach (var playerData in playersWithFarsee.Values)
+        foreach (var playerData in playersWithFarseer.Values)
         {
             foreach (var regionIdx in playerData.RegionsInView)
             {
@@ -252,9 +266,9 @@ public class FarseerServer : IDisposable
 
     private void OnPlayerDisconnect(IServerPlayer byPlayer)
     {
-        if (playersWithFarsee.ContainsKey(byPlayer))
+        if (playersWithFarseer.ContainsKey(byPlayer))
         {
-            playersWithFarsee.Remove(byPlayer);
+            playersWithFarseer.Remove(byPlayer);
         }
     }
 

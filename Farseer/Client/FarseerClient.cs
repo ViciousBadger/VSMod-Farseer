@@ -70,10 +70,17 @@ public class FarseerClient : IDisposable
             var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
             if (channel != null)
             {
-                channel.SendPacket(new FarEnableRequest
+                if (config.Enabled)
                 {
-                    PlayerConfig = config.ToServerPlayerConfig(),
-                });
+                    channel.SendPacket(new FarseerEnable
+                    {
+                        PlayerConfig = config.ToServerPlayerConfig(),
+                    });
+                }
+                else
+                {
+                    channel.SendPacket(new FarseerDisable());
+                }
             }
         }
 
@@ -81,6 +88,11 @@ public class FarseerClient : IDisposable
         {
             // re-init renderer so that zfar is updated
             renderer.Init();
+        }
+
+        if (configOnLastLoad.Enabled && !config.Enabled)
+        {
+            renderer.ClearLoadedRegions();
         }
 
         configOnLastLoad = config.Clone();
@@ -95,14 +107,20 @@ public class FarseerClient : IDisposable
 
     private void OnRecieveFarRegionData(FarRegionData data)
     {
-        renderer.BuildRegion(data);
+        if (config.Enabled)
+        {
+            renderer.BuildRegion(data);
+        }
     }
 
     private void OnRecieveFarRegionUnload(FarRegionUnload packet)
     {
-        foreach (var idx in packet.RegionIndices)
+        if (config.Enabled)
         {
-            renderer.UnloadRegion(idx);
+            foreach (var idx in packet.RegionIndices)
+            {
+                renderer.UnloadRegion(idx);
+            }
         }
     }
 
@@ -111,7 +129,7 @@ public class FarseerClient : IDisposable
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         if (channel != null)
         {
-            channel.SendPacket(new FarEnableRequest
+            channel.SendPacket(new FarseerEnable
             {
                 PlayerConfig = config.ToServerPlayerConfig(),
             });

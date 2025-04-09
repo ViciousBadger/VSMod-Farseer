@@ -19,7 +19,8 @@ public class FarseerModSystem : ModSystem
     public override void Start(ICoreAPI api)
     {
         api.Network.RegisterChannel(MOD_CHANNEL_NAME)
-            .RegisterMessageType<FarEnableRequest>()
+            .RegisterMessageType<FarseerEnable>()
+            .RegisterMessageType<FarseerDisable>()
             .RegisterMessageType<FarRegionUnload>()
             .RegisterMessageType<FarRegionData>();
     }

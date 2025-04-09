@@ -42,8 +42,15 @@ public class BatchedRegionDataBuffer
             if (packet.RegionData.RegionIndex == regionIdx)
             {
                 packet.Targets = packet.Targets.Where(t => t != target).ToArray();
-                // modSystem.Mod.Logger.Notification("remove {0} for target {1}", regionIdx, target.PlayerName);
             }
+        }
+    }
+
+    public void CancelAllForTarget(IServerPlayer target)
+    {
+        foreach (var packet in sendQueue)
+        {
+            packet.Targets = packet.Targets.Where(t => t != target).ToArray();
         }
     }
 

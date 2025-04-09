@@ -3,11 +3,15 @@ using ProtoBuf;
 namespace Farseer;
 
 [ProtoContract]
-public class FarEnableRequest
+public class FarseerEnable
 {
     [ProtoMember(1)]
     public FarseerServerPlayerConfig PlayerConfig;
 }
+
+[ProtoContract]
+public class FarseerDisable
+{ }
 
 [ProtoContract]
 public class FarRegionUnload

@@ -1,6 +1,7 @@
 {
   "config-title": "Farseer settings",
   "toggle-config": "Toggle Farseer settings window",
+  "enabled": "Enable far terrain",
   "view-distance": "Far view distance",
   "sky-tint": "Sky tint",
   "color-tint-r": "Color tint (R)",
