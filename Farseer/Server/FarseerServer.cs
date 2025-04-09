@@ -55,7 +55,7 @@ public class FarseerServer : IDisposable
         catch (Exception e)
         {
             //Couldn't load the mod config... Create a new one with default settings, but don't save it.
-            this.modSystem.Mod.Logger.Error("Could not load config! Loading default settings instead.");
+            this.modSystem.Mod.Logger.Error("Could not load config! Loading default settings instead. If you delete the config file, this error will go away magically, but your custom settings will also be lost.");
             this.modSystem.Mod.Logger.Error(e);
             config = new FarseerServerConfig();
         }
