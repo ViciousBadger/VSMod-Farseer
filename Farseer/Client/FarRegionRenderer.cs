@@ -27,6 +27,8 @@ public class FarRegionRenderer : IRenderer
     private float[] projectionMat = Mat4f.Create();
     private IShaderProgram prog;
 
+    private int farViewDistance = 3072;
+
     public FarRegionRenderer(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
         this.modSystem = modSystem;
@@ -48,12 +50,20 @@ public class FarRegionRenderer : IRenderer
 
     public void Init()
     {
-        var farViewDistance = GameMath.Max(3000f, modSystem.Client.Config.FarViewDistance);
+
+        farViewDistance = modSystem.Client.Config.FarViewDistance;
+        if (!capi.IsSinglePlayer)
+        {
+            // Limit to max server view distance
+            farViewDistance = GameMath.Min(farViewDistance, capi.World.Config.GetInt("maxFarViewDistance"));
+        }
+
         var clientMain = ((ClientMain)capi.World);
         var mainCam = clientMain.MainCamera;
 
         var prop = mainCam.GetType().GetField("ZFar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        prop.SetValue(mainCam, farViewDistance);
+        var newZFar = GameMath.Max(3000, farViewDistance);
+        prop.SetValue(mainCam, newZFar);
 
         capi.Render.Reset3DProjection();
     }
@@ -225,18 +235,10 @@ public class FarRegionRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
-        var farViewDistance = modSystem.Client.Config.FarViewDistance;
-
         var rapi = capi.Render;
         if (rapi.FrameWidth == 0) return;
 
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
-
-        // Prevent far terrain from being cut off at zfar
-        //
-        //
-        //var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
-        //rapi.Set3DProjection(farViewDistance, fov);
 
         var viewDistance = (float)capi.World.Player.WorldData.DesiredViewDistance;
 
@@ -246,10 +248,6 @@ public class FarRegionRenderer : IRenderer
             modSystem.Client.Config.ColorTintB,
             modSystem.Client.Config.ColorTintA
         );
-
-        // var fov = (float)ClientSettings.FieldOfView * ((float)Math.PI / 180f);
-        // float num = (float)rapi.FrameWidth / (float)rapi.FrameHeight;
-        // Mat4f.Perspective(projectionMat, fov, num, 32f, farViewDistance);
 
         foreach (var regionModel in activeRegionModels.Values)
         {

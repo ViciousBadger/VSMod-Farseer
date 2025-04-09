@@ -45,6 +45,18 @@ public class FarseerConfigDialog : GuiDialog
         // modSystem.Client.SaveConfigChanges();
     }
 
+    private string GetViewDistanceLabelText()
+    {
+        if (maxFarViewDistanceOnServer != 0)
+        {
+            return Lang.Get("farseer:view-distance-with-max", maxFarViewDistanceOnServer);
+        }
+        else
+        {
+            return Lang.Get("farseer:view-distance");
+        }
+    }
+
     private void ComposeDialog()
     {
         var contentBounds = ElementBounds.Fixed(25.0, 45.0, 200.0, 26.0);
@@ -61,7 +73,7 @@ public class FarseerConfigDialog : GuiDialog
             .AddStaticText(Lang.Get("farseer:enabled"), CairoFont.WhiteDetailText(), contentBounds)
             .AddSwitch(OnToggleEnabled, ElementBounds.Fixed(-26, 45, 26, 26).WithAlignment(EnumDialogArea.RightTop), "toggleEnabled")
 
-            .AddStaticText(Lang.Get("farseer:view-distance"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
+            .AddStaticText(GetViewDistanceLabelText(), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFarViewDistance, contentBounds = contentBounds.BelowCopy(), "farViewDistanceSlider")
 
             .AddStaticText(Lang.Get("farseer:sky-tint"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
