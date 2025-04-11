@@ -23,8 +23,8 @@ public class FarseerClient : IDisposable
         this.capi = capi;
 
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SetMessageHandler<FarRegionData>(OnRecieveFarRegionData);
-        channel.SetMessageHandler<FarRegionUnload>(OnRecieveFarRegionUnload);
+        channel.SetMessageHandler<FarRegionData>(OnReceiveFarRegionData);
+        channel.SetMessageHandler<FarRegionUnload>(OnReceiveFarRegionUnload);
 
         try
         {
@@ -105,7 +105,7 @@ public class FarseerClient : IDisposable
         return true;
     }
 
-    private void OnRecieveFarRegionData(FarRegionData data)
+    private void OnReceiveFarRegionData(FarRegionData data)
     {
         if (config.Enabled)
         {
@@ -113,7 +113,7 @@ public class FarseerClient : IDisposable
         }
     }
 
-    private void OnRecieveFarRegionUnload(FarRegionUnload packet)
+    private void OnReceiveFarRegionUnload(FarRegionUnload packet)
     {
         if (config.Enabled)
         {
