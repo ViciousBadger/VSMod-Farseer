@@ -97,6 +97,9 @@ public class FarseerConfigDialog : GuiDialog
             .AddStaticText(Lang.Get("farseer:fade-bias"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFadeBias, contentBounds = contentBounds.BelowCopy(), "fadeBiasSlider")
 
+            .AddStaticText(Lang.Get("farseer:globe-effect"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
+            .AddSlider(OnChangeGlobeEffect, contentBounds = contentBounds.BelowCopy(), "globeEffectSlider")
+
             .AddButton(Lang.Get("farseer:reset"), ResetConfig, contentBounds = contentBounds.BelowCopy(0.0, 20.0));
 
         bgBounds.WithChildren(contentBounds);
@@ -123,6 +126,7 @@ public class FarseerConfigDialog : GuiDialog
         composer.GetSlider("colorTintASlider").SetValues((int)(config.ColorTintA * 100), 0, 100, 1, "%");
         composer.GetSlider("lightLevelBiasSlider").SetValues((int)(config.LightLevelBias * 100), 1, 99, 1, "%");
         composer.GetSlider("fadeBiasSlider").SetValues((int)(config.FadeBias * 100), 1, 99, 1, "%");
+        composer.GetSlider("globeEffectSlider").SetValues((int)(config.GlobeEffect * 1000), 0, 100, 1, "%");
     }
 
     private bool ResetConfig()
@@ -185,6 +189,12 @@ public class FarseerConfigDialog : GuiDialog
     private bool OnChangeFadeBias(int value)
     {
         modSystem.Client.Config.FadeBias = value / 100f;
+        StartDebouncedSave();
+        return true;
+    }
+    private bool OnChangeGlobeEffect(int value)
+    {
+        modSystem.Client.Config.GlobeEffect = value / 1000f;
         StartDebouncedSave();
         return true;
     }

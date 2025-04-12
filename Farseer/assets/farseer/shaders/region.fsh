@@ -46,7 +46,7 @@ void main()
     vec4 terraColor = vec4(1);
     vec4 terraGlow = vec4(1);
     float a = seaLevel + 2;
-    float b = seaLevel - 2;
+    float b = seaLevel - 1;
     float sealevelOffsetFactor = skyTint + ((yLevel - a) / (b - a)) * (-skyTint);;
     getSkyColorAt(worldPos.xyz, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, terraColor, terraGlow);
 

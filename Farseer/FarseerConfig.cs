@@ -13,6 +13,7 @@ public class FarseerClientConfig
     public float ColorTintA;
     public float LightLevelBias;
     public float FadeBias;
+    public float GlobeEffect;
 
     public FarseerClientConfig()
     {
@@ -30,6 +31,7 @@ public class FarseerClientConfig
         ColorTintA = 0.40f;
         LightLevelBias = 0.70f;
         FadeBias = 0.4f;
+        GlobeEffect = 0.0f;
     }
 
     public FarseerClientConfig Clone()

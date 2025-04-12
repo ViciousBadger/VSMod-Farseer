@@ -15,6 +15,7 @@ uniform float fogMinIn;
 uniform float fogDensityIn; 
 
 uniform float farViewDistance;
+uniform float globeEffect;
 
 out vec4 worldPos;
 out float yLevel;
@@ -41,6 +42,8 @@ void main()
     // Makes the transition much less jank by forcing the far terrain into the
     // ground at close range
     worldPos.y -= max(0, mix(5, 0, dist*50));
+
+    worldPos.y -= globeEffect * dist * farViewDistance;
 
     fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 

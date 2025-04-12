@@ -11,5 +11,6 @@
   "color-tint-a": "Color tint (A)",
   "light-level-bias": "Light level influence",
   "fade-bias": "Fade bias",
+  "globe-effect": "Globe effect",
   "reset": "Reset to defaults"
 }
