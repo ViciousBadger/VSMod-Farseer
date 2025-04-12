@@ -2,6 +2,7 @@
 #extension GL_ARB_explicit_attrib_location: enable
 
 in vec4 worldPos;
+in float yLevel;
 in vec4 rgbaFog;
 in float dist;
 in float fogAmount;
@@ -17,6 +18,7 @@ uniform float skyTint;
 uniform vec4 colorTint;
 uniform float lightLevelBias;
 uniform float fadeBias;
+uniform int seaLevel;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outGlow;
@@ -43,7 +45,9 @@ void main()
     // Sample sky with special parameters for terrain color.
     vec4 terraColor = vec4(1);
     vec4 terraGlow = vec4(1);
-    float sealevelOffsetFactor = skyTint;
+    float a = seaLevel + 2;
+    float b = seaLevel - 2;
+    float sealevelOffsetFactor = skyTint + ((yLevel - a) / (b - a)) * (-skyTint);;
     getSkyColorAt(worldPos.xyz, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, terraColor, terraGlow);
 
     // Approximate the *real* sky color for a nice fade.

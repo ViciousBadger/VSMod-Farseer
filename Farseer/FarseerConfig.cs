@@ -63,4 +63,5 @@ public class FarseerServerConfig
     public int HeightmapGridSize = 128;
     public int MaxClientViewDistance = 4096;
     public int ChunkGenQueueThreshold = 64;
+    public bool GenRealChunks = false;
 }

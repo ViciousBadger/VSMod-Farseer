@@ -17,6 +17,7 @@ uniform float fogDensityIn;
 uniform float farViewDistance;
 
 out vec4 worldPos;
+out float yLevel;
 out vec4 rgbaFog;
 out float dist;
 out float fogAmount;
@@ -30,6 +31,7 @@ out float nightVisionStrengthv;
 
 void main()
 {
+    yLevel = vertexPositionIn.y;
     worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
     worldPos = applyGlobalWarping(worldPos);
 

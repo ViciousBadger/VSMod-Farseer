@@ -143,27 +143,34 @@ public class FarRegionGen
 
                 if (!peekWaiting.Contains(targetChunkIdx) && !nextRegionInQueue.FinishedChunks.Contains(targetChunkIdx))
                 {
-                    // Test if the chunk exists first. It's faster to load
-                    // existing chunks than to peek. (Peek ignores saved data)
-                    sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
+                    if (modSystem.Server.Config.GenRealChunks)
                     {
-                        if (exists)
+                        sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                    }
+                    else
+                    {
+                        // Test if the chunk exists first. It's faster to load
+                        // existing chunks than to peek. (Peek ignores saved data)
+                        sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
                         {
-                            sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
-                        }
-                        else
-                        {
-                            // It seems peek is about ~20-60% faster than
-                            // full chunk generation and less taxing on the
-                            // server (not to mention disk space)
-                            sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
+                            if (exists)
                             {
-                                UntilPass = EnumWorldGenPass.Terrain,
-                                OnGenerated = OnChunkColumnPeeked,
-                            });
-                            peekWaiting.Add(targetChunkIdx);
-                        }
-                    });
+                                sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                            }
+                            else
+                            {
+                                // It seems peek is about ~20-60% faster than
+                                // full chunk generation and less taxing on the
+                                // server (not to mention disk space)
+                                sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
+                                {
+                                    UntilPass = EnumWorldGenPass.Terrain,
+                                    OnGenerated = OnChunkColumnPeeked,
+                                });
+                                peekWaiting.Add(targetChunkIdx);
+                            }
+                        });
+                    }
                 }
             }
         }

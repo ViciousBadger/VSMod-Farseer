@@ -279,6 +279,7 @@ public class FarRegionRenderer : IRenderer
             prog.Uniform("colorTint", colorTintVec);
             prog.Uniform("lightLevelBias", modSystem.Client.Config.LightLevelBias);
             prog.Uniform("fadeBias", modSystem.Client.Config.FadeBias);
+            prog.Uniform("seaLevel", capi.World.SeaLevel);
 
             prog.Uniform("viewDistance", viewDistance);
             prog.Uniform("farViewDistance", (float)farViewDistance);
