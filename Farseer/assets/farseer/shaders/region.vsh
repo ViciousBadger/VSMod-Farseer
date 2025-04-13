@@ -7,9 +7,6 @@ uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-uniform vec3 sunColor; 
-uniform float dayLight; 
-
 uniform vec4 rgbaFogIn; 
 uniform float fogMinIn; 
 uniform float fogDensityIn; 
@@ -43,12 +40,11 @@ void main()
     // ground at close range
     worldPos.y -= max(0, mix(5, 0, dist*50));
 
-    worldPos.y -= globeEffect * dist * farViewDistance;
+    worldPos.y -= globeEffect * pow(dist, 2.0) * farViewDistance;
 
     fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
 
     rgbaFog = rgbaFogIn;
-    //fogAmountf = clamp(fogAmount + clamp(1 - 4 * dayLight, -0.04, 1), 0, 1);
 	nightVisionStrengthv = nightVisionStrength;
 
     vec4 camPos = viewMatrix * worldPos;

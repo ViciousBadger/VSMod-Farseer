@@ -12,6 +12,7 @@ uniform float fogDensityIn;
 uniform float fogMinIn;
 uniform float horizonFog;
 uniform vec3 sunPosition;
+uniform vec3 sunColor; 
 uniform float dayLight; 
 
 uniform float skyTint;
@@ -38,6 +39,11 @@ float bias(float value, float bias) {
   return pow(value, exp);
 }
 
+vec3 bias(vec3 value, float bias) {
+  float exp = log(0.5) / log(bias);
+  return pow(value, vec3(exp));
+}
+
 void main()
 {
     if (dist < 0.0 || dist > 1.0) discard;
@@ -48,6 +54,7 @@ void main()
     float a = seaLevel + 2;
     float b = seaLevel - 1;
     float sealevelOffsetFactor = skyTint + ((yLevel - a) / (b - a)) * (-skyTint);;
+    //float sealevelOffsetFactor = 0.25;
     getSkyColorAt(worldPos.xyz, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, terraColor, terraGlow);
 
     // Approximate the *real* sky color for a nice fade.
@@ -60,11 +67,9 @@ void main()
 	  skyColor.rgb = applyUnderwaterEffects(skyColor.rgb, murkiness);
     skyGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
 
-    //terraColor *= dayLight - (0.14 * (1-dist));
-    //terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a * (1-dist));
     terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a);
-  	//terraColor.rgb = mix(terraColor.rgb, rgbaFog.rgb, fogAmount);
-    terraColor *= bias(clamp(dayLight, 0, 1), lightLevelBias);
+    //terraColor *= bias(clamp(dayLight, 0, 1), lightLevelBias); v1.2.5 light
+    terraColor.rgb *= bias(clamp(sunColor * dayLight, 0, 1), lightLevelBias);
     terraColor = applyFog(terraColor, fogAmount);
     terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
     terraGlow *= dist;
