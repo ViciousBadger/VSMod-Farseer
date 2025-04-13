@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
@@ -11,8 +12,9 @@ public class FarRegionRenderer : IRenderer
     public struct PerModelData
     {
         public FarRegionData SourceData { get; set; }
-        public Vec3d Position { get; set; }
-        public MeshRef MeshRef { get; set; }
+        public MeshData MeshData { get; set; }
+        //public Vec3d Position { get; set; }
+        //public MeshRef MeshRef { get; set; }
     }
 
     public double RenderOrder => 0.36;
@@ -22,12 +24,15 @@ public class FarRegionRenderer : IRenderer
     private FarseerModSystem modSystem;
     private ICoreClientAPI capi;
     private Dictionary<long, PerModelData> activeRegionModels = new Dictionary<long, PerModelData>();
+    private MeshRef mergedMeshRef;
 
     private Matrixf modelMat = new Matrixf();
     private float[] projectionMat = Mat4f.Create();
     private IShaderProgram prog;
 
     private int farViewDistance = 3072;
+
+    private long mergeDelayListener = -1;
 
     public FarRegionRenderer(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
@@ -121,7 +126,7 @@ public class FarRegionRenderer : IRenderer
         {
             for (int vX = 0; vX <= gridSize; vX++)
             {
-                mesh.xyz[xyz++] = vX * cellSize;
+                mesh.xyz[xyz++] = vX * cellSize + sourceData.RegionX * sourceData.RegionSize;
 
                 int sample = 0;
 
@@ -149,7 +154,7 @@ public class FarRegionRenderer : IRenderer
                 }
 
                 mesh.xyz[xyz++] = sample;
-                mesh.xyz[xyz++] = vZ * cellSize;
+                mesh.xyz[xyz++] = vZ * cellSize + sourceData.RegionZ * sourceData.RegionSize;
             }
         }
 
@@ -172,19 +177,20 @@ public class FarRegionRenderer : IRenderer
 
         if (activeRegionModels.TryGetValue(sourceData.RegionIndex, out PerModelData existingData))
         {
-            existingData.MeshRef.Dispose();
+            existingData.MeshData.Dispose();
             activeRegionModels.Remove(sourceData.RegionIndex);
         }
 
         activeRegionModels.Add(sourceData.RegionIndex, new PerModelData()
         {
             SourceData = sourceData,
-            Position = new Vec3d(
-                    sourceData.RegionX * sourceData.RegionSize,
-                    0.0f,
-                    sourceData.RegionZ * sourceData.RegionSize
-                    ),
-            MeshRef = capi.Render.UploadMesh(mesh),
+            MeshData = mesh,
+            // Position = new Vec3d(
+            //         sourceData.RegionX * sourceData.RegionSize,
+            //         0.0f,
+            //         sourceData.RegionZ * sourceData.RegionSize
+            //         ),
+            // MeshRef = capi.Render.UploadMesh(mesh),
         });
 
         if (!isRebuild)
@@ -208,13 +214,17 @@ public class FarRegionRenderer : IRenderer
                 BuildRegion(northWestData.SourceData, true);
             }
         }
+
+        // MergeRegions();
+        StartMergeDelay();
     }
 
     public void UnloadRegion(long regionIdx)
     {
         if (activeRegionModels.TryGetValue(regionIdx, out PerModelData model))
         {
-            model.MeshRef.Dispose();
+            // model.MeshRef.Dispose();
+            model.MeshData.Dispose();
             activeRegionModels.Remove(regionIdx);
         }
     }
@@ -223,9 +233,57 @@ public class FarRegionRenderer : IRenderer
     {
         foreach (var regionModel in activeRegionModels.Values)
         {
-            regionModel.MeshRef.Dispose();
+            // regionModel.MeshRef.Dispose();
+            regionModel.MeshData.Dispose();
         }
         activeRegionModels.Clear();
+        mergedMeshRef?.Dispose();
+        mergedMeshRef = null;
+    }
+
+    private void StartMergeDelay()
+    {
+        if (mergeDelayListener != -1)
+        {
+            capi.Event.UnregisterCallback(mergeDelayListener);
+        }
+        mergeDelayListener = capi.Event.RegisterCallback((_) => MergeRegions(), 1500);
+    }
+
+    private void MergeRegions()
+    {
+        mergedMeshRef?.Dispose();
+        var mergedMeshData = new MeshData(false);
+
+        var verticesCount = activeRegionModels.Values.Select(region => region.MeshData.VerticesCount).Sum();
+        var indicesCount = activeRegionModels.Values.Select(region => region.MeshData.IndicesCount).Sum();
+
+        mergedMeshData.SetVerticesCount(verticesCount);
+        mergedMeshData.xyz = new float[verticesCount * 3];
+        mergedMeshData.SetIndicesCount(indicesCount);
+        mergedMeshData.Indices = new int[indicesCount];
+
+        int xyz = 0;
+        int index = 0;
+        int indexOffs = 0;
+
+        // Do a big merge.
+        // May take a bit of time but allows rendering everything in only 1 drawcall.
+        foreach (var regionModel in activeRegionModels.Values)
+        {
+            // AddMeshData is super slow, manual merge much faster.
+            // mergedMeshData.AddMeshData(regionModel.MeshData);
+            for (int i = 0; i < regionModel.MeshData.XyzCount; i++)
+            {
+                mergedMeshData.xyz[xyz++] = regionModel.MeshData.xyz[i];
+            }
+            for (int i = 0; i < regionModel.MeshData.IndicesCount; i++)
+            {
+                mergedMeshData.Indices[index++] = indexOffs + regionModel.MeshData.Indices[i];
+            }
+            indexOffs += regionModel.MeshData.VerticesCount;
+        }
+        mergedMeshRef = capi.Render.UploadMesh(mergedMeshData);
     }
 
     public void Dispose()
@@ -235,6 +293,8 @@ public class FarRegionRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
+        if (mergedMeshRef == null) return;
+
         var rapi = capi.Render;
         if (rapi.FrameWidth == 0) return;
 
@@ -249,46 +309,41 @@ public class FarRegionRenderer : IRenderer
             modSystem.Client.Config.ColorTintA
         );
 
-        foreach (var regionModel in activeRegionModels.Values)
-        {
+        prog.Use();
 
-            prog.Use();
+        modelMat.Identity()
+            // .Translate(regionModel.Position.X, regionModel.Position.Y, regionModel.Position.Z)
+            .Translate(-camPos.X, -camPos.Y, -camPos.Z);
 
-            modelMat.Identity()
-                .Translate(regionModel.Position.X, regionModel.Position.Y, regionModel.Position.Z)
-                .Translate(-camPos.X, -camPos.Y, -camPos.Z);
+        prog.UniformMatrix("modelMatrix", modelMat.Values);
+        prog.UniformMatrix("viewMatrix", rapi.CameraMatrixOriginf);
+        //prog.UniformMatrix("projectionMatrix", projectionMat);
+        prog.UniformMatrix("projectionMatrix", rapi.CurrentProjectionMatrix);
 
-            prog.UniformMatrix("modelMatrix", modelMat.Values);
-            prog.UniformMatrix("viewMatrix", rapi.CameraMatrixOriginf);
-            //prog.UniformMatrix("projectionMatrix", projectionMat);
-            prog.UniformMatrix("projectionMatrix", rapi.CurrentProjectionMatrix);
+        prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
+        prog.Uniform("sunColor", capi.World.Calendar.SunColor);
+        prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength));
 
-            prog.Uniform("sunPosition", capi.World.Calendar.SunPositionNormalized);
-            prog.Uniform("sunColor", capi.World.Calendar.SunColor);
-            prog.Uniform("dayLight", Math.Max(0, capi.World.Calendar.DayLightStrength));
+        prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
+        prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
+        prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
+        prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
 
-            prog.Uniform("rgbaFogIn", capi.Ambient.BlendedFogColor);
-            prog.Uniform("fogDensityIn", capi.Ambient.BlendedFogDensity);
-            prog.Uniform("fogMinIn", capi.Ambient.BlendedFogMin);
-            prog.Uniform("horizonFog", capi.Ambient.BlendedCloudDensity);
+        //prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
+        //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
 
-            //prog.Uniform("flatFogDensity", capi.Ambient.BlendedFlatFogDensity);
-            //prog.Uniform("flatFogStart", capi.Ambient.BlendedFlatFogYPosForShader - (float)capi.World.Player.Entity.CameraPos.Y);
+        prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
+        prog.Uniform("colorTint", colorTintVec);
+        prog.Uniform("lightLevelBias", modSystem.Client.Config.LightLevelBias);
+        prog.Uniform("fadeBias", modSystem.Client.Config.FadeBias);
+        prog.Uniform("globeEffect", modSystem.Client.Config.GlobeEffect);
+        prog.Uniform("seaLevel", capi.World.SeaLevel);
 
-            prog.Uniform("skyTint", modSystem.Client.Config.SkyTint);
-            prog.Uniform("colorTint", colorTintVec);
-            prog.Uniform("lightLevelBias", modSystem.Client.Config.LightLevelBias);
-            prog.Uniform("fadeBias", modSystem.Client.Config.FadeBias);
-            prog.Uniform("globeEffect", modSystem.Client.Config.GlobeEffect);
-            prog.Uniform("seaLevel", capi.World.SeaLevel);
+        prog.Uniform("viewDistance", viewDistance);
+        prog.Uniform("farViewDistance", (float)farViewDistance);
 
-            prog.Uniform("viewDistance", viewDistance);
-            prog.Uniform("farViewDistance", (float)farViewDistance);
+        rapi.RenderMesh(mergedMeshRef);
 
-            rapi.RenderMesh(regionModel.MeshRef);
-
-            prog.Stop();
-        }
-        //rapi.Reset3DProjection();
+        prog.Stop();
     }
 }
