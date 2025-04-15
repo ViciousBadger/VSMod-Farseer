@@ -1,6 +1,7 @@
 namespace Farseer;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
@@ -16,7 +17,7 @@ public class AsyncGen : IAsyncServerSystem
     FarseerModSystem modSystem;
     private ICoreServerAPI sapi;
 
-    private Queue<long> regionQueue = new();
+    private ConcurrentQueue<long> regionQueue = new();
 
     public event AsyncGenDoneDelegate AsyncGenDone;
 
@@ -41,10 +42,9 @@ public class AsyncGen : IAsyncServerSystem
 
     public void OnSeparateThreadTick()
     {
-        if (regionQueue.Count > 0)
+        if (regionQueue.TryDequeue(out long next))
         {
-            var next = regionQueue.Dequeue();
-
+            //var supplyCHunks = sapi.Server.AddServerThread
             LetsGo(next);
         }
     }
