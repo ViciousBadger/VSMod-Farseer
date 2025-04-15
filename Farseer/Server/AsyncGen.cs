@@ -100,8 +100,8 @@ public class AsyncGen : IAsyncServerSystem
                     chunks[i] = serverChunk;
                 }
 
-                List<ChunkColumnGenerationDelegate> generationDelegates = worldgenHandler.OnChunkColumnGen[1];
-                for (int i = 0; i < 1; i++)
+                List<ChunkColumnGenerationDelegate> generationDelegates = worldgenHandler.OnChunkColumnGen[(int)EnumWorldGenPass.Terrain];
+                for (int i = 0; i < generationDelegates.Count; i++)
                 {
                     try
                     {
@@ -109,7 +109,7 @@ public class AsyncGen : IAsyncServerSystem
                     }
                     catch (Exception ex)
                     {
-                        modSystem.Mod.Logger.Error("An error was thrown in pass {5} when generating chunk column X={0},Z={1}\nException {2}\n\n", chunkX, chunkZ, ex);
+                        modSystem.Mod.Logger.Error("An error was thrown in when generating chunk column X={0},Z={1}\nException {2}\n\n", chunkX, chunkZ, ex);
                         break;
                     }
                 }
