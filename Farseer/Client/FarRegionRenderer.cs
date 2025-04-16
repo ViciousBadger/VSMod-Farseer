@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
@@ -40,12 +41,12 @@ public class FarRegionRenderer : IRenderer
         capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
 
         // var farFog = new AmbientModifier().EnsurePopulated();
-        // farFog.FogDensity = new WeightedFloat(0.005f, 1.0f);
-        // farFog.FogMin = new WeightedFloat(0.0f, 1.0f);
+        // farFog.FogDensity = new WeightedFloat(1f / 512f, 1.0f);
+        // farFog.FogMin = new WeightedFloat(1.0f, 1.0f);
         // farFog.FogColor = new WeightedFloatArray(new float[] {
-        //         mainColor.X,mainColor.Y,mainColor.Z
+        //         modSystem.Client.Config.ColorTintR, modSystem.Client.Config.ColorTintG, modSystem.Client.Config.ColorTintB
         //     }, 1.0f);
-        //capi.Ambient.CurrentModifiers.Add("farfog", farFog);
+        // capi.Ambient.CurrentModifiers.Add("farfog", farFog);
     }
 
     public void Init()

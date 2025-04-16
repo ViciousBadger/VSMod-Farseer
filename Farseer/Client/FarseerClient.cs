@@ -44,9 +44,6 @@ public class FarseerClient : IDisposable
 
         configOnLastLoad = config.Clone();
 
-        this.renderer = new FarRegionRenderer(modSystem, capi);
-        this.configDialog = new FarseerConfigDialog(modSystem, capi);
-
         capi.Input.RegisterHotKey(
                 "toggleFarseerConfig",
                 Lang.Get("farseer:toggle-config"),
@@ -126,6 +123,9 @@ public class FarseerClient : IDisposable
 
     public void Init()
     {
+        this.renderer = new FarRegionRenderer(modSystem, capi);
+        this.configDialog = new FarseerConfigDialog(modSystem, capi);
+
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
         if (channel != null)
         {
