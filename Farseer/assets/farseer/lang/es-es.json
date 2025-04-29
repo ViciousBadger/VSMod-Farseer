@@ -1,0 +1,19 @@
+{
+  "_comentarios-1": "Farseer v1.3.1 || Enlace del Mod: https://mods.vintagestory.at/show/mod/22371 ",
+  "_comentarios-2": "Traducido por C4BR3R4 || Última Modificación: 11/04/2025 || Publicación: https://c4br3r4.es/index.php?topic=1349.0 ",
+
+  "config-title": "Ajustes de Farseer",
+  "toggle-config": "Farseer ► Abrir la Ventana de Configuración",
+  "enabled": "Activar Terreno Lejano",
+  "view-distance": "Distancia Visual Lejana",
+  "view-distance-with-max": "Distancia Visual Lejana (Máx {0})",
+  "sky-tint": "Tono del Cielo",
+  "color-tint-r": "Tono de Rojo",
+  "color-tint-g": "Tono de Verde",
+  "color-tint-b": "Tono de Azul",
+  "color-tint-a": "Saturación",
+  "light-level-bias": "Influencia del Nivel de Luz",
+  "fade-bias": "Fundido",
+  "globe-effect": "Efecto Globo",
+  "reset": " Restablecer Ajustes "
+}
