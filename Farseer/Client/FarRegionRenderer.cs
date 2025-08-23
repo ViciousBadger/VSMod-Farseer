@@ -60,10 +60,8 @@ public class FarRegionRenderer : IRenderer
 
         var clientMain = ((ClientMain)capi.World);
         var mainCam = clientMain.MainCamera;
-
-        var prop = mainCam.GetType().GetField("ZFar", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var newZFar = GameMath.Max(3000, farViewDistance);
-        prop.SetValue(mainCam, newZFar);
+        mainCam.ZFar = newZFar;
 
         capi.Render.Reset3DProjection();
     }
