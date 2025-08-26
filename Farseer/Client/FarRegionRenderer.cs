@@ -39,6 +39,7 @@ public class FarRegionRenderer : IRenderer
 
         capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque);
 
+        // NOTE: Some experiments with using the fog systems to create a better far terrain transition - so far no good reliable results
         // var farFog = new AmbientModifier().EnsurePopulated();
         // farFog.FogDensity = new WeightedFloat(0.005f, 1.0f);
         // farFog.FogMin = new WeightedFloat(0.0f, 1.0f);

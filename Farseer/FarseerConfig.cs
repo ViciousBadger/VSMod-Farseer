@@ -66,4 +66,5 @@ public class FarseerServerConfig
     public int MaxClientViewDistance = 4096;
     public int ChunkGenQueueThreshold = 64;
     public bool GenRealChunks = false;
+    public bool DisableProgressLogging = false;
 }

@@ -6,6 +6,7 @@ using Vintagestory.API.Common;
 
 namespace Farseer;
 
+/// Somewhat maybe reliable mechanism for sending batches of far region data at regular intervals, to avoid flooding the clients with data to process, causing lag.
 public class BatchedRegionDataBuffer
 {
     record Packet
@@ -72,7 +73,6 @@ public class BatchedRegionDataBuffer
             {
                 channel.SendPacket(packet.RegionData, packet.Targets);
             }
-            // modSystem.Mod.Logger.Notification("send region {0} to {1} targets", packet.RegionData.RegionIndex, packet.Targets.Length);
         }
     }
 }

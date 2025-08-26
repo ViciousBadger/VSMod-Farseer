@@ -81,13 +81,10 @@ public class FarseerServer : IDisposable
             //player.RegionsInView.Clear();
             //player.RegionsLoaded.Clear();
             //
-            modSystem.Mod.Logger.Chat("Player {0} changed their client settings (new view distance {1})", fromPlayer.PlayerName, request.PlayerConfig.FarViewDistance);
         }
         else
         {
             playersWithFarseer.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, PlayerConfig = request.PlayerConfig });
-
-            modSystem.Mod.Logger.Chat("Enabled for player {0} (view distance {1})", fromPlayer.PlayerName, request.PlayerConfig.FarViewDistance);
         }
 
         UpdateRegionsInView();
@@ -101,8 +98,6 @@ public class FarseerServer : IDisposable
 
             // Might as well cancel then
             regionSendBuffer.CancelAllForTarget(fromPlayer);
-
-            modSystem.Mod.Logger.Chat("Disabled for player {0}", fromPlayer.PlayerName);
         }
     }
 
@@ -177,7 +172,6 @@ public class FarseerServer : IDisposable
 
     private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
-        // modSystem.Mod.Logger.Notification("load {0} for players in view", regionData.RegionIndex);
         var relevantPlayers = playersWithFarseer.Values
             .Where(
                     player => player.RegionsInView.Contains(regionData.RegionIndex) &&
@@ -186,16 +180,11 @@ public class FarseerServer : IDisposable
 
         if (relevantPlayers.Any())
         {
-            // modSystem.Mod.Logger.Notification("send {0} to {1}.....", regionData.RegionIndex, relevantPlayers.Count());
             regionSendBuffer.Insert(regionData, relevantPlayers.Select(p => p.ServerPlayer).ToArray());
             foreach (var player in relevantPlayers)
             {
                 player.RegionsLoaded.Add(regionData.RegionIndex);
             }
-        }
-        else
-        {
-            // modSystem.Mod.Logger.Notification("no players found.....");
         }
     }
 
@@ -208,7 +197,6 @@ public class FarseerServer : IDisposable
             player.RegionsLoaded.Remove(idx);
             regionSendBuffer.CancelForTarget(idx, player.ServerPlayer);
         }
-        // modSystem.Mod.Logger.Notification("Unload {0} regions for {1}.", regionIndices.Length, player.ServerPlayer.PlayerName);
     }
 
     private void PruneUnusedRegions()
@@ -239,7 +227,6 @@ public class FarseerServer : IDisposable
         var playerBlockPos = player.ServerPlayer.Entity.Pos.AsBlockPos;
         var playerRegionIdx = sapi.WorldManager.MapRegionIndex2DByBlockPos(playerBlockPos.X, playerBlockPos.Z);
         var playerRegionCoord = sapi.WorldManager.MapRegionPosFromIndex2D(playerRegionIdx);
-        // modSystem.Mod.Logger.Chat("playerRegionIdx: {0}, playerRegionCoord: {1}", playerRegionIdx, playerRegionCoord);
 
         int farViewDistanceInRegions = (player.PlayerConfig.FarViewDistance / sapi.WorldManager.RegionSize) + 1;
 

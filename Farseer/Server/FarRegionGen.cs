@@ -79,7 +79,6 @@ public class FarRegionGen
         {
             //No need to enqueue if all if the region chunks were already loaded!
             FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
-            // modSystem.Mod.Logger.Notification("{0} was pre-cooked for us :o", newInProgressRegion.RegionIdx);
         }
         else
         {
@@ -90,7 +89,7 @@ public class FarRegionGen
     public void CancelTasksNotIn(HashSet<long> regionsToKeep)
     {
         var n = regionGenerationQueue.RemoveAll(r => !regionsToKeep.Contains(r.RegionIdx) && r.FinishedChunks.Count == 0);
-        if (n > 0)
+        if (n > 0 && !modSystem.Server.Config.DisableProgressLogging)
         {
             modSystem.Mod.Logger.Notification("Cancelling {0} far generation task(s) because no players are in range.", n);
         }
@@ -125,7 +124,11 @@ public class FarRegionGen
     private void LoadNextFarChunksInQueue()
     {
         if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > modSystem.Server.Config.ChunkGenQueueThreshold) return;
-        modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
+
+        if (!modSystem.Server.Config.DisableProgressLogging)
+        {
+            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
+        }
 
         var nextRegionInQueue = regionGenerationQueue[0];
 
@@ -256,14 +259,13 @@ public class FarRegionGen
 
         if (IsRegionFullyPopulated(region))
         {
-            // modSystem.Mod.Logger.Notification("{0} is cooked", inProgressRegion.RegionIdx);
             FarRegionGenerated?.Invoke(region.RegionIdx, region.Heightmap);
             regionGenerationQueue.Remove(region);
 
             // Try to keep up a good pace
             LoadNextFarChunksInQueue();
 
-            if (regionGenerationQueue.Count == 0)
+            if (regionGenerationQueue.Count == 0 && !modSystem.Server.Config.DisableProgressLogging)
             {
                 modSystem.Mod.Logger.Notification("All done!");
             }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace Farseer;
@@ -40,6 +41,14 @@ public class FarRegionProvider : IDisposable
 
     public void LoadRegion(long regionIdx)
     {
+        // Check if this region is within the world bounds first.
+        Vec3i regionCoords = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
+        if (regionCoords.X < 0 || regionCoords.Z < 0 || regionCoords.X > sapi.WorldManager.MapSizeX / sapi.WorldManager.RegionSize || regionCoords.Z > sapi.WorldManager.MapSizeZ / sapi.WorldManager.RegionSize)
+        {
+            modSystem.Mod.Logger.Warning("a region is outside the world! ignoring");
+            return;
+        }
+
         if (inMemoryRegionCache.TryGetValue(regionIdx, out FarRegionData regionDataFromCache))
         {
             RegionReady?.Invoke(regionDataFromCache);
