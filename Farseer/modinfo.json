@@ -9,6 +9,6 @@
     "game": "1.21.0"
   },
   "side": "Universal",
-  "requiredOnClient": "true",
-  "requiredOnServer": "true"
+  "requiredOnClient": true,
+  "requiredOnServer": true
 }
