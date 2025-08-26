@@ -45,7 +45,7 @@ public class FarRegionProvider : IDisposable
         Vec3i regionCoords = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
         if (regionCoords.X < 0 || regionCoords.Z < 0 || regionCoords.X > sapi.WorldManager.MapSizeX / sapi.WorldManager.RegionSize || regionCoords.Z > sapi.WorldManager.MapSizeZ / sapi.WorldManager.RegionSize)
         {
-            modSystem.Mod.Logger.Warning("a region is outside the world! ignoring");
+            // modSystem.Mod.Logger.Warning("a region is outside the world! ignoring");
             return;
         }
 
