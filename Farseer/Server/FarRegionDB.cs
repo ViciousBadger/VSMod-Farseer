@@ -1,6 +1,8 @@
 namespace Farseer;
 
+using System;
 using Microsoft.Data.Sqlite;
+using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
@@ -12,6 +14,10 @@ public class FarRegionDB : SQLiteDBConnection
 
     SqliteCommand getRegionCmd;
     SqliteCommand insertRegionCmd;
+    
+    // Batch insert support
+    private List<(long regionIdx, FarRegionHeightmap heightmap)> pendingInserts = new();
+    private const int BATCH_SIZE = 10;
 
     public override void OnOpened()
     {
@@ -56,18 +62,45 @@ public class FarRegionDB : SQLiteDBConnection
 
     public void InsertRegionHeightmap(long regionIdx, FarRegionHeightmap heightmap)
     {
+        pendingInserts.Add((regionIdx, heightmap));
+        
+        if (pendingInserts.Count >= BATCH_SIZE)
+        {
+            FlushPendingInserts();
+        }
+    }
+
+    private void FlushPendingInserts()
+    {
+        if (pendingInserts.Count == 0) return;
+
         using var transaction = sqliteConn.BeginTransaction();
         insertRegionCmd.Transaction = transaction;
 
-        insertRegionCmd.Parameters["@pos"].Value = regionIdx;
-        insertRegionCmd.Parameters["@heightmap"].Value = SerializerUtil.Serialize(heightmap);
-        insertRegionCmd.ExecuteNonQuery();
+        try
+        {
+            for (int i = 0; i < pendingInserts.Count; i++)
+            {
+                var (regionIdx, heightmap) = pendingInserts[i];
+                insertRegionCmd.Parameters["@pos"].Value = regionIdx;
+                insertRegionCmd.Parameters["@heightmap"].Value = SerializerUtil.Serialize(heightmap);
+                insertRegionCmd.ExecuteNonQuery();
+            }
 
-        transaction.Commit();
+            transaction.Commit();
+            pendingInserts.Clear();
+        }
+        catch (Exception e)
+        {
+            transaction.Rollback();
+            logger.Error("Database insert failed, transaction rolled back", e);
+            throw;
+        }
     }
 
     public override void Close()
     {
+        FlushPendingInserts();
         insertRegionCmd?.Dispose();
         getRegionCmd?.Dispose();
 
@@ -76,6 +109,7 @@ public class FarRegionDB : SQLiteDBConnection
 
     public override void Dispose()
     {
+        FlushPendingInserts();
         insertRegionCmd?.Dispose();
         getRegionCmd?.Dispose();
 

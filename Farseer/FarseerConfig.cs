@@ -1,11 +1,27 @@
+using System;
 using ProtoBuf;
 
 namespace Farseer;
 
 public class FarseerClientConfig
 {
+    private int _farViewDistance = 4096;
+    private int _minDrawDistance = 0;
+
     public bool Enabled;
-    public int FarViewDistance;
+
+    public int FarViewDistance
+    {
+        get => _farViewDistance;
+        set => _farViewDistance = Math.Clamp(value, 512, 16384);
+    }
+
+    public int MinDrawDistance
+    {
+        get => _minDrawDistance;
+        set => _minDrawDistance = Math.Clamp(value, 0, 2048);
+    }
+
     public float SkyTint;
     public float ColorTintR;
     public float ColorTintG;
@@ -24,6 +40,7 @@ public class FarseerClientConfig
     {
         Enabled = true;
         FarViewDistance = 4096;
+        MinDrawDistance = 0;
         SkyTint = 5.0f;
         ColorTintR = 0.26f;
         ColorTintG = 0.29f;
@@ -60,11 +77,57 @@ public class FarseerServerPlayerConfig
     public int FarViewDistance;
 }
 
+public enum FarseerQuality
+{
+    Performance = 64,   // Fast, low detail, 1/4 data
+    Balanced = 128,     // Default, good balance
+    Quality = 256,      // High detail, 4x data
+    Ultra = 512         // Maximum accuracy, 16x data
+}
+
 public class FarseerServerConfig
 {
-    public int HeightmapGridSize = 128;
-    public int MaxClientViewDistance = 4096;
-    public int ChunkGenQueueThreshold = 64;
+    private int _heightmapGridSize = 128;
+    private int _maxClientViewDistance = 4096;
+    private int _chunkGenQueueThreshold = 64;
+
+    public int HeightmapGridSize
+    {
+        get => _heightmapGridSize;
+        set => _heightmapGridSize = Math.Clamp(value, 32, 512);
+    }
+
+    public int MaxClientViewDistance
+    {
+        get => _maxClientViewDistance;
+        set => _maxClientViewDistance = Math.Clamp(value, 512, 16384);
+    }
+
+    public int ChunkGenQueueThreshold
+    {
+        get => _chunkGenQueueThreshold;
+        set => _chunkGenQueueThreshold = Math.Clamp(value, 16, 2000);
+    }
+
     public bool GenRealChunks = false;
     public bool DisableProgressLogging = false;
+    public bool StoreBiomeData = true; // Store biome colors for more accurate terrain coloring
+
+    // Quality preset helper
+    public void SetQuality(FarseerQuality quality)
+    {
+        HeightmapGridSize = (int)quality;
+    }
+
+    public FarseerQuality GetQuality()
+    {
+        return HeightmapGridSize switch
+        {
+            64 => FarseerQuality.Performance,
+            128 => FarseerQuality.Balanced,
+            256 => FarseerQuality.Quality,
+            512 => FarseerQuality.Ultra,
+            _ => FarseerQuality.Balanced
+        };
+    }
 }

@@ -4,7 +4,7 @@
   "name": "Farseer",
   "authors": ["Badgerson"],
   "description": "Draws silhouettes of the terrain outside of your view distance",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "dependencies": {
     "game": "1.21.0"
   },

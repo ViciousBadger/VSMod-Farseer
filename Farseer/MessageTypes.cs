@@ -44,4 +44,6 @@ public class FarRegionHeightmap
     public int GridSize; // ..of each axis
     [ProtoMember(2)]
     public int[] Points;
+    [ProtoMember(3)]
+    public int[] Colors; // Optional: RGB color per grid point (R=climate temp, G=climate rain, B=forest/beach)
 }

@@ -40,9 +40,6 @@ public class FarseerConfigDialog : GuiDialog
     public override void OnGuiClosed()
     {
         base.OnGuiClosed();
-
-        // CancelDebouncedSave();
-        // modSystem.Client.SaveConfigChanges();
     }
 
     private string GetViewDistanceLabelText()
@@ -75,6 +72,9 @@ public class FarseerConfigDialog : GuiDialog
 
             .AddStaticText(GetViewDistanceLabelText(), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeFarViewDistance, contentBounds = contentBounds.BelowCopy(), "farViewDistanceSlider")
+
+            .AddStaticText(Lang.Get("farseer:min-draw-distance"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
+            .AddSlider(OnChangeMinDrawDistance, contentBounds = contentBounds.BelowCopy(), "minDrawDistanceSlider")
 
             .AddStaticText(Lang.Get("farseer:sky-tint"), CairoFont.WhiteDetailText(), contentBounds = contentBounds.BelowCopy())
             .AddSlider(OnChangeSkyTint, contentBounds = contentBounds.BelowCopy(), "skyTintSlider")
@@ -119,6 +119,7 @@ public class FarseerConfigDialog : GuiDialog
         {
             composer.GetSlider("farViewDistanceSlider").SetAlarmValue(maxFarViewDistanceOnServer);
         }
+        composer.GetSlider("minDrawDistanceSlider").SetValues(config.MinDrawDistance, 0, 2048, 64, " blocks");
         composer.GetSlider("skyTintSlider").SetValues((int)(config.SkyTint * 100), 0, 1000, 10, "%");
         composer.GetSlider("colorTintRSlider").SetValues((int)(config.ColorTintR * 100), 0, 100, 1, "%");
         composer.GetSlider("colorTintGSlider").SetValues((int)(config.ColorTintG * 100), 0, 100, 1, "%");
@@ -146,6 +147,13 @@ public class FarseerConfigDialog : GuiDialog
     private bool OnChangeFarViewDistance(int value)
     {
         modSystem.Client.Config.FarViewDistance = value;
+        StartDebouncedSave();
+        return true;
+    }
+
+    private bool OnChangeMinDrawDistance(int value)
+    {
+        modSystem.Client.Config.MinDrawDistance = value;
         StartDebouncedSave();
         return true;
     }

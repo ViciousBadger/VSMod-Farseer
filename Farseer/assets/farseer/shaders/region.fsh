@@ -48,16 +48,20 @@ void main()
 {
     if (dist < 0.0 || dist > 1.0) discard;
 
-    // Sample sky with special parameters for terrain color.
+    // Height-based fog density - more fog in valleys, less on peaks
+    float heightFactor = (yLevel - seaLevel) / 100.0;
+    float heightFogMultiplier = exp(-heightFactor * 0.5);
+    heightFogMultiplier = clamp(heightFogMultiplier, 0.5, 2.0);
+
+    // Sample sky with special parameters for terrain color
     vec4 terraColor = vec4(1);
     vec4 terraGlow = vec4(1);
     float a = seaLevel + 2;
     float b = seaLevel - 1;
-    float sealevelOffsetFactor = skyTint + ((yLevel - a) / (b - a)) * (-skyTint);;
-    //float sealevelOffsetFactor = 0.25;
+    float sealevelOffsetFactor = skyTint + ((yLevel - a) / (b - a)) * (-skyTint);
     getSkyColorAt(worldPos.xyz, sunPosition, sealevelOffsetFactor, clamp(dayLight, 0, 1), horizonFog, terraColor, terraGlow);
 
-    // Approximate the *real* sky color for a nice fade.
+    // Approximate the *real* sky color for a nice fade
     vec4 skyColor = vec4(1);
     vec4 skyGlow = vec4(1);
     float sealevelOffsetFactorSky = 0.25;
@@ -68,15 +72,26 @@ void main()
     skyGlow.y *= clamp((dayLight - 0.05) * 2 - 50*murkiness, 0, 1);
 
     terraColor.rgb = mix(terraColor.rgb, colorTint.rgb, colorTint.a);
-    //terraColor *= bias(clamp(dayLight, 0, 1), lightLevelBias); v1.2.5 light
-    terraColor.rgb *= bias(clamp(sunColor * dayLight, 0, 1), lightLevelBias);
-    terraColor = applyFog(terraColor, fogAmount);
-    terraColor = applySpheresFog(terraColor, fogAmount, worldPos.xyz);
+    
+    // Apply lighting - transition from sunColor during day to neutral white at night
+    vec3 lightColor = mix(vec3(1.0), sunColor, clamp(dayLight * 2.0, 0, 1));
+    float lightLevel = max(dayLight, 0.15);
+    terraColor.rgb *= bias(clamp(lightColor * lightLevel, 0, 1), lightLevelBias);
+    
+    // Apply height-based fog
+    float adjustedFogAmount = fogAmount * heightFogMultiplier;
+    terraColor = applyFog(terraColor, adjustedFogAmount);
+    terraColor = applySpheresFog(terraColor, adjustedFogAmount, worldPos.xyz);
     terraGlow *= dist;
 
     float fade = min(1.0, bias(dist, fadeBias));
     outColor = mix(terraColor, skyColor, fade);
     outGlow = mix(terraGlow, skyGlow, fade);
+
+    // Wider alpha fade to match transition zone
+    float edgeFade = smoothstep(0.0, 0.25, dist);
+    outColor.a *= edgeFade;
+    outGlow.a *= edgeFade;
 
 #if SSAOLEVEL > 0
 	outGPosition = vec4(0);

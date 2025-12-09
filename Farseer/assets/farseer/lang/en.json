@@ -4,6 +4,7 @@
   "enabled": "Enable far terrain",
   "view-distance": "Far view distance",
   "view-distance-with-max": "Far view distance (Max {0})",
+  "min-draw-distance": "Minimum draw distance",
   "sky-tint": "Sky tint",
   "color-tint-r": "Color tint (R)",
   "color-tint-g": "Color tint (G)",

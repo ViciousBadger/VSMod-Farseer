@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -20,10 +21,23 @@ public class FarRegionProvider : IDisposable
     private FarRegionDB db;
     private FarRegionGen generator;
 
+    // Pre-calculated world bounds
+    private int minRegionX;
+    private int minRegionZ;
+    private int maxRegionX;
+    private int maxRegionZ;
+
     public FarRegionProvider(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
         this.modSystem = modSystem;
         this.sapi = sapi;
+
+        // Pre-calculate world bounds (VS allows negative coordinates down to -30 blocks)
+        int regionSize = sapi.WorldManager.RegionSize;
+        this.minRegionX = -30 / regionSize - 1;  // -1 for safety margin
+        this.minRegionZ = -30 / regionSize - 1;
+        this.maxRegionX = (sapi.WorldManager.MapSizeX + 30) / regionSize + 1;
+        this.maxRegionZ = (sapi.WorldManager.MapSizeZ + 30) / regionSize + 1;
 
         this.db = new FarRegionDB(modSystem.Mod.Logger);
         string errorMessage = null;
@@ -43,9 +57,9 @@ public class FarRegionProvider : IDisposable
     {
         // Check if this region is within the world bounds first.
         Vec3i regionCoords = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
-        if (regionCoords.X < 0 || regionCoords.Z < 0 || regionCoords.X > sapi.WorldManager.MapSizeX / sapi.WorldManager.RegionSize || regionCoords.Z > sapi.WorldManager.MapSizeZ / sapi.WorldManager.RegionSize)
+        if (regionCoords.X < minRegionX || regionCoords.Z < minRegionZ || 
+            regionCoords.X > maxRegionX || regionCoords.Z > maxRegionZ)
         {
-            // modSystem.Mod.Logger.Warning("a region is outside the world! ignoring");
             return;
         }
 
@@ -80,6 +94,7 @@ public class FarRegionProvider : IDisposable
     public void PruneRegionCache(HashSet<long> regionsToKeep)
     {
         var toRemove = new List<long>();
+        
         foreach (var regionIdx in inMemoryRegionCache.Keys)
         {
             if (!regionsToKeep.Contains(regionIdx))
@@ -88,9 +103,10 @@ public class FarRegionProvider : IDisposable
             }
         }
 
-        foreach (var regionIdx in toRemove)
+        // Remove regions not in view
+        for (int i = 0; i < toRemove.Count; i++)
         {
-            inMemoryRegionCache.Remove(regionIdx);
+            inMemoryRegionCache.Remove(toRemove[i]);
         }
 
         generator.CancelTasksNotIn(regionsToKeep);

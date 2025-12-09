@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -15,14 +14,16 @@ public class FarRegionGen
         public long RegionIdx { get; }
         public FarRegionHeightmap Heightmap { get; }
         public HashSet<long> FinishedChunks { get; } = new();
+        public int Priority { get; set; }
 
-        public InProgressRegion(long regionIdx, int gridSize)
+        public InProgressRegion(long regionIdx, int gridSize, bool storeColors)
         {
             RegionIdx = regionIdx;
             Heightmap = new FarRegionHeightmap
             {
                 GridSize = gridSize,
                 Points = new int[gridSize * gridSize],
+                Colors = null, // Disabled for performance
             };
         }
     }
@@ -32,11 +33,15 @@ public class FarRegionGen
     private FarseerModSystem modSystem;
     private ICoreServerAPI sapi;
 
-    private List<InProgressRegion> regionGenerationQueue = new();
+    private Dictionary<long, InProgressRegion> regionGenerationQueue = new();
     private HashSet<long> peekWaiting = new();
+    private readonly object queueLock = new object();
 
     private int chunksInRegionColumn;
     private int chunksInRegionArea;
+    private int chunkSize;
+    private int regionSize;
+    private int seaLevel;
 
     public FarRegionGen(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
@@ -47,99 +52,147 @@ public class FarRegionGen
 
         this.chunksInRegionColumn = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
         this.chunksInRegionArea = this.chunksInRegionColumn * this.chunksInRegionColumn;
+        this.chunkSize = sapi.WorldManager.ChunkSize;
+        this.regionSize = sapi.WorldManager.RegionSize;
+        this.seaLevel = sapi.World.SeaLevel;
     }
 
     public void StartGeneratingRegion(long regionIdx)
     {
-        if (regionGenerationQueue.Any(r => r.RegionIdx == regionIdx)) return;
-
-        var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
-        var chunkStartX = regionPos.X * chunksInRegionColumn;
-        var chunkStartZ = regionPos.Z * chunksInRegionColumn;
-
-        int gridSize = modSystem.Server.Config.HeightmapGridSize;
-        var newInProgressRegion = new InProgressRegion(regionIdx, gridSize);
-
-        // First, populate already loaded chunks
-        for (int z = 0; z < chunksInRegionColumn; z++)
+        lock(queueLock)
         {
-            for (int x = 0; x < chunksInRegionColumn; x++)
-            {
-                int targetChunkX = chunkStartX + x;
-                int targetChunkZ = chunkStartZ + z;
+            if (regionGenerationQueue.ContainsKey(regionIdx)) return;
 
-                if (sapi.WorldManager.GetMapChunk(targetChunkX, targetChunkZ) is IMapChunk mapChunk)
+            var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
+            var chunkStartX = regionPos.X * chunksInRegionColumn;
+            var chunkStartZ = regionPos.Z * chunksInRegionColumn;
+
+            int gridSize = modSystem.Server.Config.HeightmapGridSize;
+            bool storeBiomes = modSystem.Server.Config.StoreBiomeData;
+            var newInProgressRegion = new InProgressRegion(regionIdx, gridSize, storeBiomes);
+
+            // First, populate already loaded chunks
+            for (int z = 0; z < chunksInRegionColumn; z++)
+            {
+                for (int x = 0; x < chunksInRegionColumn; x++)
                 {
-                    PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
+                    int targetChunkX = chunkStartX + x;
+                    int targetChunkZ = chunkStartZ + z;
+
+                    if (sapi.WorldManager.GetMapChunk(targetChunkX, targetChunkZ) is IMapChunk mapChunk)
+                    {
+                        PopulateRegionFromChunk(newInProgressRegion, targetChunkX, targetChunkZ, mapChunk);
+                    }
                 }
             }
-        }
 
-        if (IsRegionFullyPopulated(newInProgressRegion))
-        {
-            //No need to enqueue if all if the region chunks were already loaded!
-            FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
-        }
-        else
-        {
-            regionGenerationQueue.Add(newInProgressRegion);
+            if (IsRegionFullyPopulated(newInProgressRegion))
+            {
+                //No need to enqueue if all if the region chunks were already loaded!
+                FarRegionGenerated?.Invoke(newInProgressRegion.RegionIdx, newInProgressRegion.Heightmap);
+            }
+            else
+            {
+                regionGenerationQueue.Add(regionIdx, newInProgressRegion);
+            }
         }
     }
 
     public void CancelTasksNotIn(HashSet<long> regionsToKeep)
     {
-        var n = regionGenerationQueue.RemoveAll(r => !regionsToKeep.Contains(r.RegionIdx) && r.FinishedChunks.Count == 0);
-        if (n > 0 && !modSystem.Server.Config.DisableProgressLogging)
+        lock(queueLock)
         {
-            modSystem.Mod.Logger.Notification("Cancelling {0} far generation task(s) because no players are in range.", n);
+            int n = 0;
+            var toRemove = new List<long>();
+            
+            foreach (var pair in regionGenerationQueue)
+            {
+                if (!regionsToKeep.Contains(pair.Key) && pair.Value.FinishedChunks.Count == 0)
+                {
+                    toRemove.Add(pair.Key);
+                    n++;
+                }
+            }
+
+            for (int i = 0; i < toRemove.Count; i++)
+            {
+                regionGenerationQueue.Remove(toRemove[i]);
+            }
+
+            if (n > 0 && !modSystem.Server.Config.DisableProgressLogging)
+            {
+                modSystem.Mod.Logger.Notification("Cancelling {0} far generation task(s) because no players are in range.", n);
+            }
         }
     }
 
     public void SortTasksByPriority(Dictionary<long, int> regionPriorities)
     {
-        if (regionGenerationQueue.Count > 0)
+        lock(queueLock)
         {
-            regionGenerationQueue.Sort((a, b) =>
+            // Priority is stored but sorting happens on-demand in LoadNextFarChunksInQueue
+            if (regionGenerationQueue.Count > 0)
             {
-                // Always prioritize half baked regions to avoid scattered chunk-loading
-                var mostFinished = a.FinishedChunks.Count.CompareTo(b.FinishedChunks.Count);
-                if (mostFinished != 0)
+                foreach (var pair in regionGenerationQueue)
                 {
-                    return -mostFinished;
-                }
-
-                if (regionPriorities.TryGetValue(a.RegionIdx, out int aPrio))
-                {
-                    if (regionPriorities.TryGetValue(b.RegionIdx, out int bPrio))
+                    if (regionPriorities.TryGetValue(pair.Key, out int priority))
                     {
-                        return aPrio.CompareTo(bPrio);
+                        pair.Value.Priority = priority;
                     }
                 }
-                // No sorting done if either region is missing a priority.
-                return 0;
-            });
+            }
         }
     }
 
     private void LoadNextFarChunksInQueue()
     {
-        if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > modSystem.Server.Config.ChunkGenQueueThreshold) return;
-
-        if (!modSystem.Server.Config.DisableProgressLogging)
+        InProgressRegion nextRegionInQueue = null;
+        
+        lock(queueLock)
         {
-            modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
-        }
+            if (regionGenerationQueue.Count <= 0 || sapi.WorldManager.CurrentGeneratingChunkCount > modSystem.Server.Config.ChunkGenQueueThreshold) return;
 
-        var nextRegionInQueue = regionGenerationQueue[0];
+            if (!modSystem.Server.Config.DisableProgressLogging)
+            {
+                modSystem.Mod.Logger.Notification("Building heightmaps for {0} faraway region(s)..", regionGenerationQueue.Count);
+            }
+
+            // Get highest priority region (sort on-demand)
+            int bestFinishedCount = -1;
+            int bestPriority = int.MaxValue;
+
+            foreach (var pair in regionGenerationQueue.Values)
+            {
+                int finishedCount = pair.FinishedChunks.Count;
+                int priority = pair.Priority;
+
+                // Prioritize half-baked regions first, then by priority
+                if (finishedCount > bestFinishedCount || 
+                    (finishedCount == bestFinishedCount && priority < bestPriority))
+                {
+                    nextRegionInQueue = pair;
+                    bestFinishedCount = finishedCount;
+                    bestPriority = priority;
+                }
+            }
+
+            if (nextRegionInQueue == null) return;
+        }
 
         var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(nextRegionInQueue.RegionIdx);
         var chunkStartX = regionPos.X * chunksInRegionColumn;
         var chunkStartZ = regionPos.Z * chunksInRegionColumn;
 
+        // Throttle: Only request a limited number of chunks per tick to avoid overwhelming the system
+        int chunksRequestedThisTick = 0;
+        int maxChunksPerTick = 32; // Limit to 32 chunk requests per tick
+
         for (int z = 0; z < chunksInRegionColumn; z++)
         {
             for (int x = 0; x < chunksInRegionColumn; x++)
             {
+                if (chunksRequestedThisTick >= maxChunksPerTick) return; // Stop if we hit the limit
+
                 int targetChunkX = chunkStartX + x;
                 int targetChunkZ = chunkStartZ + z;
                 var targetChunkIdx = sapi.WorldManager.MapChunkIndex2D(targetChunkX, targetChunkZ);
@@ -149,6 +202,7 @@ public class FarRegionGen
                     if (modSystem.Server.Config.GenRealChunks)
                     {
                         sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
+                        chunksRequestedThisTick++;
                     }
                     else
                     {
@@ -173,6 +227,7 @@ public class FarRegionGen
                                 peekWaiting.Add(targetChunkIdx);
                             }
                         });
+                        chunksRequestedThisTick++;
                     }
                 }
             }
@@ -192,10 +247,12 @@ public class FarRegionGen
                 var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
 
                 // We only care about the chunk data if it's part of one of the enqueued regions..
-                var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
-                if (inProgressRegion != null)
+                lock(queueLock)
                 {
-                    PopulateRegionFromChunk(inProgressRegion, pair.Key.X, pair.Key.Y, pair.Value[0].MapChunk);
+                    if (regionGenerationQueue.TryGetValue(regionOfChunkIdx, out InProgressRegion inProgressRegion))
+                    {
+                        PopulateRegionFromChunk(inProgressRegion, pair.Key.X, pair.Key.Y, pair.Value[0].MapChunk);
+                    }
                 }
             }
         }
@@ -210,10 +267,12 @@ public class FarRegionGen
         var regionOfChunkIdx = sapi.WorldManager.MapRegionIndex2D(regionOfChunkX, regionOfChunkZ);
 
         // We only care about the chunk data if it's part of one of the enqueued regions..
-        var inProgressRegion = regionGenerationQueue.Find(region => region.RegionIdx == regionOfChunkIdx);
-        if (inProgressRegion != null)
+        lock(queueLock)
         {
-            PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
+            if (regionGenerationQueue.TryGetValue(regionOfChunkIdx, out InProgressRegion inProgressRegion))
+            {
+                PopulateRegionFromChunk(inProgressRegion, chunkCoord.X, chunkCoord.Y, chunks[0].MapChunk);
+            }
         }
     }
 
@@ -224,33 +283,45 @@ public class FarRegionGen
 
     private void PopulateRegionFromChunk(InProgressRegion region, int chunkX, int chunkZ, IMapChunk chunk)
     {
+        if (chunk?.WorldGenTerrainHeightMap == null) return;
+
         var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(region.RegionIdx);
         var chunkStartX = regionPos.X * chunksInRegionColumn;
         var chunkStartZ = regionPos.Z * chunksInRegionColumn;
 
         int gridSize = region.Heightmap.GridSize;
-        float cellSize = sapi.WorldManager.RegionSize / (float)gridSize;
+        float cellSize = regionSize / (float)gridSize;
+        int[] heightmapPoints = region.Heightmap.Points;
+        int heightmapLength = chunk.WorldGenTerrainHeightMap.Length;
 
         for (int z = 0; z < gridSize; z++)
         {
+            int offsetBlockPosZ = (int)(z * cellSize);
+            int targetChunkZ = chunkStartZ + offsetBlockPosZ / chunkSize;
+            
+            if (targetChunkZ != chunkZ) continue;
+            
+            int posInChunkZ = offsetBlockPosZ % chunkSize;
+            if (posInChunkZ < 0) posInChunkZ += chunkSize;  // Handle negative modulo
+            int baseChunkCoord = posInChunkZ * chunkSize;
+
             for (int x = 0; x < gridSize; x++)
             {
                 int offsetBlockPosX = (int)(x * cellSize);
-                int offsetBlockPosZ = (int)(z * cellSize);
+                int targetChunkX = chunkStartX + offsetBlockPosX / chunkSize;
 
-                int targetChunkX = chunkStartX + offsetBlockPosX / sapi.WorldManager.ChunkSize;
-                int targetChunkZ = chunkStartZ + offsetBlockPosZ / sapi.WorldManager.ChunkSize;
-
-                if (targetChunkX == chunkX && targetChunkZ == chunkZ)
+                if (targetChunkX == chunkX)
                 {
-                    int posInChunkX = offsetBlockPosX % sapi.WorldManager.ChunkSize;
-                    int posInChunkZ = offsetBlockPosZ % sapi.WorldManager.ChunkSize;
+                    int posInChunkX = offsetBlockPosX % chunkSize;
+                    if (posInChunkX < 0) posInChunkX += chunkSize;  // Handle negative modulo
+                    int chunkHeightmapCoord = baseChunkCoord + posInChunkX;
 
-                    int chunkHeightmapCoord = posInChunkZ * sapi.WorldManager.ChunkSize + posInChunkX;
-
-                    var sampledHeight = chunk.WorldGenTerrainHeightMap[chunkHeightmapCoord];
-                    var sampledHeightOrSea = GameMath.Max(sampledHeight, sapi.World.SeaLevel);
-                    region.Heightmap.Points[z * gridSize + x] = sampledHeightOrSea;
+                    // Bounds check to prevent crashes
+                    if (chunkHeightmapCoord >= 0 && chunkHeightmapCoord < heightmapLength)
+                    {
+                        var sampledHeight = chunk.WorldGenTerrainHeightMap[chunkHeightmapCoord];
+                        heightmapPoints[z * gridSize + x] = sampledHeight > seaLevel ? sampledHeight : seaLevel;
+                    }
                 }
             }
         }
@@ -260,7 +331,11 @@ public class FarRegionGen
         if (IsRegionFullyPopulated(region))
         {
             FarRegionGenerated?.Invoke(region.RegionIdx, region.Heightmap);
-            regionGenerationQueue.Remove(region);
+            
+            lock(queueLock)
+            {
+                regionGenerationQueue.Remove(region.RegionIdx);
+            }
 
             // Try to keep up a good pace
             LoadNextFarChunksInQueue();

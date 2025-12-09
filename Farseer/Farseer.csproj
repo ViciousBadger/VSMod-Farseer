@@ -49,16 +49,17 @@
     </Reference>
   </ItemGroup>
 
-<ItemGroup>
-  <Content Include="modinfo.json">
+  <ItemGroup>
+    <Content Include="modinfo.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </Content>
-</ItemGroup>
-
-    <!--<ItemGroup>
-  <Content Include="modicon.png">
+    </Content>
+    <Content Include="modicon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </Content>
-</ItemGroup>-->
+    </Content>
+    <Content Include="assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>assets\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
 
 </Project>

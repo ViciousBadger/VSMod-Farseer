@@ -1,7 +1,6 @@
 using Vintagestory.API.Server;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Vintagestory.API.MathTools;
 
 namespace Farseer;
@@ -24,6 +23,12 @@ public class FarseerServer : IDisposable
 
     FarRegionProvider regionProvider;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarseer = new Dictionary<IServerPlayer, FarseePlayer>();
+
+    // Reusable collections to avoid allocations
+    private Dictionary<long, int> regionPrioritiesCombined = new();
+    private List<long> regionsNewInView = new();
+    private List<long> regionsToUnload = new();
+    private List<IServerPlayer> relevantPlayers = new();
 
     public FarseerServerConfig Config => config;
 
@@ -60,7 +65,18 @@ public class FarseerServer : IDisposable
             this.modSystem.Mod.Logger.Error(e);
             config = new FarseerServerConfig();
         }
-        sapi.World.Config.SetInt("maxFarViewDistance", config.MaxClientViewDistance);
+
+        // Validate and set world config value
+        try
+        {
+            int maxViewDistance = Math.Max(512, Math.Min(16384, config.MaxClientViewDistance));
+            sapi.World.Config.SetInt("maxFarViewDistance", maxViewDistance);
+        }
+        catch (Exception e)
+        {
+            this.modSystem.Mod.Logger.Error("Failed to set maxFarViewDistance in world config. Using default value.");
+            this.modSystem.Mod.Logger.Error(e);
+        }
     }
 
     private void EnableForPlayer(IServerPlayer fromPlayer, FarseerEnable request)
@@ -78,9 +94,6 @@ public class FarseerServer : IDisposable
         {
             // Happens when players change their client-side config.
             player.PlayerConfig = request.PlayerConfig;
-            //player.RegionsInView.Clear();
-            //player.RegionsLoaded.Clear();
-            //
         }
         else
         {
@@ -95,8 +108,6 @@ public class FarseerServer : IDisposable
         if (playersWithFarseer.ContainsKey(fromPlayer))
         {
             playersWithFarseer.Remove(fromPlayer);
-
-            // Might as well cancel then
             regionSendBuffer.CancelAllForTarget(fromPlayer);
         }
     }
@@ -106,6 +117,9 @@ public class FarseerServer : IDisposable
         var anyPlayerMoved = false;
         foreach (var player in playersWithFarseer.Values)
         {
+            // Validate player entity exists
+            if (player.ServerPlayer?.Entity == null) continue;
+            
             var oldPos = player.LastPos;
             var newPos = player.ServerPlayer.Entity.ServerPos.XYZInt;
 
@@ -130,7 +144,7 @@ public class FarseerServer : IDisposable
     private void UpdateRegionsInView()
     {
         // Select highest priority for each region.
-        var regionPrioritiesCombined = new Dictionary<long, int>();
+        regionPrioritiesCombined.Clear();
 
         foreach (var player in playersWithFarseer.Values)
         {
@@ -154,17 +168,16 @@ public class FarseerServer : IDisposable
                 }
             }
 
-            foreach (var newRegion in GetRegionsNewInView(regionsInViewBefore, regionsInViewNow))
+            GetRegionsNewInView(regionsInViewBefore, regionsInViewNow, regionsNewInView);
+            for (int i = 0; i < regionsNewInView.Count; i++)
             {
-                // Start loading this region - will be sent to the player once
-                // it's ready, as long as it's still in view.
-                regionProvider.LoadRegion(newRegion);
+                regionProvider.LoadRegion(regionsNewInView[i]);
             }
 
-            var toUnload = GetRegionsNoLongerInView(regionsInViewBefore, regionsInViewNow).Where(regionIdx => player.RegionsLoaded.Contains(regionIdx)).ToArray();
-            if (toUnload.Length > 0)
+            GetRegionsToUnload(regionsInViewBefore, regionsInViewNow, player.RegionsLoaded, regionsToUnload);
+            if (regionsToUnload.Count > 0)
             {
-                UnloadRegionsForPlayer(player, toUnload);
+                UnloadRegionsForPlayer(player, regionsToUnload);
             }
         }
         regionProvider.Reprioritize(regionPrioritiesCombined);
@@ -172,28 +185,35 @@ public class FarseerServer : IDisposable
 
     private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
-        var relevantPlayers = playersWithFarseer.Values
-            .Where(
-                    player => player.RegionsInView.Contains(regionData.RegionIndex) &&
-                    !player.RegionsLoaded.Contains(regionData.RegionIndex)
-                  );
-
-        if (relevantPlayers.Any())
+        relevantPlayers.Clear();
+        
+        foreach (var player in playersWithFarseer.Values)
         {
-            regionSendBuffer.Insert(regionData, relevantPlayers.Select(p => p.ServerPlayer).ToArray());
-            foreach (var player in relevantPlayers)
+            // Validate player is still connected and has valid entity
+            if (player.ServerPlayer?.Entity == null) continue;
+            
+            if (player.RegionsInView.Contains(regionData.RegionIndex) &&
+                !player.RegionsLoaded.Contains(regionData.RegionIndex))
             {
+                relevantPlayers.Add(player.ServerPlayer);
                 player.RegionsLoaded.Add(regionData.RegionIndex);
             }
         }
+
+        if (relevantPlayers.Count > 0)
+        {
+            regionSendBuffer.Insert(regionData, relevantPlayers.ToArray());
+        }
     }
 
-    private void UnloadRegionsForPlayer(FarseePlayer player, long[] regionIndices)
+    private void UnloadRegionsForPlayer(FarseePlayer player, List<long> regionIndices)
     {
         var channel = sapi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
-        channel.SendPacket(new FarRegionUnload { RegionIndices = regionIndices }, player.ServerPlayer);
-        foreach (var idx in regionIndices)
+        channel.SendPacket(new FarRegionUnload { RegionIndices = regionIndices.ToArray() }, player.ServerPlayer);
+        
+        for (int i = 0; i < regionIndices.Count; i++)
         {
+            long idx = regionIndices[i];
             player.RegionsLoaded.Remove(idx);
             regionSendBuffer.CancelForTarget(idx, player.ServerPlayer);
         }
@@ -212,14 +232,28 @@ public class FarseerServer : IDisposable
         regionProvider.PruneRegionCache(regionsToKeep);
     }
 
-    private HashSet<long> GetRegionsNewInView(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow)
+    private void GetRegionsNewInView(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow, List<long> output)
     {
-        return regionsInViewNow.Where(region => !regionsInViewBefore.Contains(region)).ToHashSet();
+        output.Clear();
+        foreach (var region in regionsInViewNow)
+        {
+            if (!regionsInViewBefore.Contains(region))
+            {
+                output.Add(region);
+            }
+        }
     }
 
-    private HashSet<long> GetRegionsNoLongerInView(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow)
+    private void GetRegionsToUnload(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow, HashSet<long> regionsLoaded, List<long> output)
     {
-        return regionsInViewBefore.Where(region => !regionsInViewNow.Contains(region)).ToHashSet();
+        output.Clear();
+        foreach (var region in regionsInViewBefore)
+        {
+            if (!regionsInViewNow.Contains(region) && regionsLoaded.Contains(region))
+            {
+                output.Add(region);
+            }
+        }
     }
 
     private HashSet<long> GetRegionsInViewOfPlayer(FarseePlayer player, out Dictionary<long, int> priorities)
@@ -231,7 +265,6 @@ public class FarseerServer : IDisposable
         int farViewDistanceInRegions = (player.PlayerConfig.FarViewDistance / sapi.WorldManager.RegionSize) + 1;
 
         var result = new HashSet<long>();
-
         priorities = new();
         var thisPriority = 0;
 

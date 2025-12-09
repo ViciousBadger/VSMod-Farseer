@@ -12,6 +12,7 @@ uniform float fogMinIn;
 uniform float fogDensityIn; 
 
 uniform float farViewDistance;
+uniform float minDrawDistance;
 uniform float globeEffect;
 
 out vec4 worldPos;
@@ -33,13 +34,17 @@ void main()
     worldPos = modelMatrix * vec4(vertexPositionIn, 1.0);
     worldPos = applyGlobalWarping(worldPos);
 
-    float distStart = viewDistance * 0.785;
+    float distStart = max(viewDistance * 0.785, minDrawDistance);
     dist = (length(worldPos.xz) - distStart) / (farViewDistance - distStart - 512);
 
-    // Makes the transition much less jank by forcing the far terrain into the
-    // ground at close range
-    worldPos.y -= max(0, mix(5, 0, dist*50));
+    // Wider, smoother transition zone
+    float transitionZone = smoothstep(0.0, 0.25, dist);
+    float transitionCurve = transitionZone * transitionZone * transitionZone; // Cubic for extra smoothness
+    
+    // Gentler vertical displacement (8 blocks max)
+    worldPos.y -= max(0, mix(8.0, 0.0, transitionCurve));
 
+    // Globe effect
     worldPos.y -= globeEffect * pow(dist, 2.0) * farViewDistance;
 
     fogAmount = getFogLevel(worldPos, fogMinIn, fogDensityIn);
