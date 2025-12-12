@@ -1,4 +1,5 @@
 using ProtoBuf;
+using Vintagestory.API.MathTools;
 
 namespace Farseer;
 
@@ -43,6 +44,18 @@ public class FarRegionData
     public byte[] CompressedColors; // Optional compressed colors
     [ProtoMember(9)]
     public bool Compressed;
+
+    /// <summary>
+    /// Calculate the center position in world space of this region (With optional height)
+    /// </summary>
+    public Vec3d GetCenterPos(float y = 0)
+    {
+        return new Vec3d(
+            RegionX * RegionSize + RegionSize / 2.0,
+            y,
+            RegionZ * RegionSize + RegionSize / 2.0
+        );
+    }
 }
 
 [ProtoContract]

@@ -88,7 +88,7 @@ void main()
     outColor = mix(terraColor, skyColor, fade);
     outGlow = mix(terraGlow, skyGlow, fade);
 
-    // Wider alpha fade to match transition zone
+    // Wide alpha fade to match transition zone
     float edgeFade = smoothstep(0.0, 0.25, dist);
     outColor.a *= edgeFade;
     outGlow.a *= edgeFade;

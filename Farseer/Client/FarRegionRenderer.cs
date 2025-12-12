@@ -13,8 +13,19 @@ public class FarRegionRenderer : IRenderer
         public FarRegionData SourceData { get; set; }
         public Vec3d Position { get; set; }
         public MeshRef MeshRef { get; set; }
+
+        /// <summary>
+        /// Grid size of current active LOD level; may differ from source data grid size.
+        /// </summary>
         public int GridSize { get; set; }
         public double LastRebuildTime { get; set; }
+    }
+
+    public enum Neighbor
+    {
+        East = 0,
+        South = 1,
+        SouthEast = 2,
     }
 
     public double RenderOrder => 0.36;
@@ -29,15 +40,16 @@ public class FarRegionRenderer : IRenderer
     private IShaderProgram prog;
 
     private int farViewDistance = 3072;
-    
+
     // Reusable mesh data for updates
-    private MeshData reusableMesh = new MeshData(false);
+    private MeshData heightmapMesh = new MeshData(false);
     private readonly Dictionary<(int grid, int seamMask, bool skirts), int[]> indexCache = new();
-    
+
+
     // Cache for neighbor lookups
-    private PerModelData[] neighborCache = new PerModelData[4];
-    private bool[] neighborFound = new bool[4];
-    
+    private PerModelData[] neighborCache = new PerModelData[3];
+    private bool[] neighborFound = new bool[3];
+
     // LOD update tracking
     private double lodUpdateAccumulator = 0;
     private const double LOD_UPDATE_INTERVAL = 1.0; // Check LOD every 1 second
@@ -116,17 +128,12 @@ public class FarRegionRenderer : IRenderer
 
         // Calculate distance-based LOD
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
-        Vec3d regionCenter = new Vec3d(
-            sourceData.RegionX * sourceData.RegionSize + sourceData.RegionSize / 2.0,
-            0,
-            sourceData.RegionZ * sourceData.RegionSize + sourceData.RegionSize / 2.0
-        );
-        double distSq = camPos.SquareDistanceTo(regionCenter);
-        
+        double distSq = camPos.SquareDistanceTo(sourceData.GetCenterPos());
+
         // Determine LOD level with hysteresis to prevent thrashing
         int baseGridSize = sourceData.Heightmap.GridSize;
         int lodGridSize = baseGridSize;
-        
+
         // Get current LOD if region exists
         int currentLOD = 0; // 0 = full, 1 = half, 2 = quarter
         if (hasExisting)
@@ -135,12 +142,12 @@ public class FarRegionRenderer : IRenderer
             else if (existingData.GridSize == Math.Max(32, baseGridSize / 2)) currentLOD = 1;
             else if (existingData.GridSize == Math.Max(32, baseGridSize / 4)) currentLOD = 2;
         }
-        
+
         // LOD thresholds with hysteresis (10% margin to prevent flickering)
         double lod1Threshold = 2048 * 2048;
         double lod2Threshold = 4096 * 4096;
         double hysteresis = 0.1;
-        
+
         if (distSq > lod2Threshold * (1.0 + (currentLOD == 2 ? -hysteresis : hysteresis)))
         {
             lodGridSize = Math.Max(32, baseGridSize / 4); // Quarter resolution
@@ -157,9 +164,12 @@ public class FarRegionRenderer : IRenderer
         var southEastIdx = RegionNeighbourIndex(sourceData.RegionIndex, 1, 1, sourceData.RegionMapSize);
 
         // Cache neighbor lookups
-        neighborFound[0] = activeRegionModels.TryGetValue(eastIdx, out neighborCache[0]);
-        neighborFound[1] = activeRegionModels.TryGetValue(southIdx, out neighborCache[1]);
-        neighborFound[2] = activeRegionModels.TryGetValue(southEastIdx, out neighborCache[2]);
+        neighborFound[(int)Neighbor.East] =
+            activeRegionModels.TryGetValue(eastIdx, out neighborCache[(int)Neighbor.East]);
+        neighborFound[(int)Neighbor.South] =
+            activeRegionModels.TryGetValue(southIdx, out neighborCache[(int)Neighbor.South]);
+        neighborFound[(int)Neighbor.SouthEast] =
+            activeRegionModels.TryGetValue(southEastIdx, out neighborCache[(int)Neighbor.SouthEast]);
 
         var gridSize = lodGridSize; // Use LOD grid size instead of source
         float cellSize = sourceData.RegionSize / (float)gridSize;
@@ -223,24 +233,24 @@ public class FarRegionRenderer : IRenderer
         if (canUpdate)
         {
             // Only update vertices, reuse capacity
-            reusableMesh.SetVerticesCount(vertexCount);
-            if (reusableMesh.xyz == null || reusableMesh.xyz.Length != vertexCount * 3)
+            heightmapMesh.SetVerticesCount(vertexCount);
+            if (heightmapMesh.xyz == null || heightmapMesh.xyz.Length != vertexCount * 3)
             {
-                reusableMesh.xyz = new float[vertexCount * 3];
+                heightmapMesh.xyz = new float[vertexCount * 3];
             }
-            reusableMesh.SetIndicesCount(indicesCount);
-            if (reusableMesh.Indices == null || reusableMesh.Indices.Length != indicesCount)
+            heightmapMesh.SetIndicesCount(indicesCount);
+            if (heightmapMesh.Indices == null || heightmapMesh.Indices.Length != indicesCount)
             {
-                reusableMesh.Indices = new int[indicesCount];
+                heightmapMesh.Indices = new int[indicesCount];
             }
         }
         else
         {
             // Full mesh creation
-            reusableMesh.SetVerticesCount(vertexCount);
-            reusableMesh.xyz = new float[vertexCount * 3];
-            reusableMesh.SetIndicesCount(indicesCount);
-            reusableMesh.Indices = new int[indicesCount];
+            heightmapMesh.SetVerticesCount(vertexCount);
+            heightmapMesh.xyz = new float[vertexCount * 3];
+            heightmapMesh.SetIndicesCount(indicesCount);
+            heightmapMesh.Indices = new int[indicesCount];
         }
 
         int xyz = 0;
@@ -249,24 +259,29 @@ public class FarRegionRenderer : IRenderer
         {
             for (int vX = 0; vX <= gridSize; vX++)
             {
-                reusableMesh.xyz[xyz++] = vX * cellSize;
+                heightmapMesh.xyz[xyz++] = vX * cellSize;
 
                 int sample = 0;
 
-                if (vX == gridSize && vZ == gridSize && neighborFound[2] && GridSizesMatch(sourceData, neighborCache[2].SourceData))
+                if (
+                        vX == gridSize &&
+                        vZ == gridSize &&
+                        neighborFound[(int)Neighbor.SouthEast] &&
+                        GridSizesMatch(sourceData, neighborCache[2].SourceData)
+                )
                 {
                     // For corner, select north-western-most point south-east neighbour 
-                    sample = neighborCache[2].SourceData.Heightmap.Points[0];
+                    sample = neighborCache[(int)Neighbor.SouthEast].SourceData.Heightmap.Points[0];
                 }
-                else if (vX == gridSize && vZ < gridSize && neighborFound[0] && GridSizesMatch(sourceData, neighborCache[0].SourceData))
+                else if (vX == gridSize && vZ < gridSize && neighborFound[(int)Neighbor.East] && GridSizesMatch(sourceData, neighborCache[0].SourceData))
                 {
                     // For x end, select west-most point of east neighbour
-                    sample = neighborCache[0].SourceData.Heightmap.Points[vZ * gridSize];
+                    sample = neighborCache[(int)Neighbor.East].SourceData.Heightmap.Points[vZ * gridSize];
                 }
-                else if (vZ == gridSize && vX < gridSize && neighborFound[1] && GridSizesMatch(sourceData, neighborCache[1].SourceData))
+                else if (vZ == gridSize && vX < gridSize && neighborFound[(int)Neighbor.South] && GridSizesMatch(sourceData, neighborCache[1].SourceData))
                 {
                     // For z end, select north-most point of south neighbour
-                    sample = neighborCache[1].SourceData.Heightmap.Points[vX];
+                    sample = neighborCache[(int)Neighbor.South].SourceData.Heightmap.Points[vX];
                 }
                 else
                 {
@@ -279,8 +294,8 @@ public class FarRegionRenderer : IRenderer
                     sample = sourceData.Heightmap.Points[sourceIdx];
                 }
 
-                reusableMesh.xyz[xyz++] = sample;
-                reusableMesh.xyz[xyz++] = vZ * cellSize;
+                heightmapMesh.xyz[xyz++] = sample;
+                heightmapMesh.xyz[xyz++] = vZ * cellSize;
 
                 vertexIndex++;
             }
@@ -294,16 +309,16 @@ public class FarRegionRenderer : IRenderer
             for (int k = 0; k <= gridSize; k++)
             {
                 // top strip (fine edge)
-                reusableMesh.xyz[xyz++] = gridSize * cellSize;
-                reusableMesh.xyz[xyz++] = reusableMesh.xyz[(k * (gridSize + 1) + gridSize) * 3 + 1]; // reuse height
-                reusableMesh.xyz[xyz++] = k * cellSize;
+                heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+                heightmapMesh.xyz[xyz++] = heightmapMesh.xyz[(k * (gridSize + 1) + gridSize) * 3 + 1]; // reuse height
+                heightmapMesh.xyz[xyz++] = k * cellSize;
 
                 // bottom strip (coarse neighbor edge sample)
                 int neighborIdx = Math.Min(neighborCache[0].GridSize - 1, (int)(k * (neighborCache[0].GridSize - 1f) / gridSize));
                 float sample = neighborCache[0].SourceData.Heightmap.Points[neighborIdx * neighborCache[0].GridSize];
-                reusableMesh.xyz[xyz++] = gridSize * cellSize;
-                reusableMesh.xyz[xyz++] = sample;
-                reusableMesh.xyz[xyz++] = k * cellSize;
+                heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+                heightmapMesh.xyz[xyz++] = sample;
+                heightmapMesh.xyz[xyz++] = k * cellSize;
             }
 
             if (IsSkirtEnabled())
@@ -313,14 +328,14 @@ public class FarRegionRenderer : IRenderer
                     // top of skirt = neighbor edge height
                     int neighborIdx = Math.Min(neighborCache[0].GridSize - 1, (int)(k * (neighborCache[0].GridSize - 1f) / gridSize));
                     float sample = neighborCache[0].SourceData.Heightmap.Points[neighborIdx * neighborCache[0].GridSize];
-                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
-                    reusableMesh.xyz[xyz++] = sample;
-                    reusableMesh.xyz[xyz++] = k * cellSize;
+                    heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+                    heightmapMesh.xyz[xyz++] = sample;
+                    heightmapMesh.xyz[xyz++] = k * cellSize;
 
                     // bottom of skirt
-                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
-                    reusableMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
-                    reusableMesh.xyz[xyz++] = k * cellSize;
+                    heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+                    heightmapMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
+                    heightmapMesh.xyz[xyz++] = k * cellSize;
                 }
             }
         }
@@ -331,16 +346,16 @@ public class FarRegionRenderer : IRenderer
             for (int k = 0; k <= gridSize; k++)
             {
                 // left strip (fine edge)
-                reusableMesh.xyz[xyz++] = k * cellSize;
-                reusableMesh.xyz[xyz++] = reusableMesh.xyz[(gridSize * (gridSize + 1) + k) * 3 + 1];
-                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                heightmapMesh.xyz[xyz++] = k * cellSize;
+                heightmapMesh.xyz[xyz++] = heightmapMesh.xyz[(gridSize * (gridSize + 1) + k) * 3 + 1];
+                heightmapMesh.xyz[xyz++] = gridSize * cellSize;
 
                 // right strip (coarse neighbor edge sample)
                 int neighborIdx = Math.Min(neighborCache[1].GridSize - 1, (int)(k * (neighborCache[1].GridSize - 1f) / gridSize));
                 float sample = neighborCache[1].SourceData.Heightmap.Points[neighborIdx];
-                reusableMesh.xyz[xyz++] = k * cellSize;
-                reusableMesh.xyz[xyz++] = sample;
-                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                heightmapMesh.xyz[xyz++] = k * cellSize;
+                heightmapMesh.xyz[xyz++] = sample;
+                heightmapMesh.xyz[xyz++] = gridSize * cellSize;
             }
 
             if (IsSkirtEnabled())
@@ -349,13 +364,13 @@ public class FarRegionRenderer : IRenderer
                 {
                     int neighborIdx = Math.Min(neighborCache[1].GridSize - 1, (int)(k * (neighborCache[1].GridSize - 1f) / gridSize));
                     float sample = neighborCache[1].SourceData.Heightmap.Points[neighborIdx];
-                    reusableMesh.xyz[xyz++] = k * cellSize;
-                    reusableMesh.xyz[xyz++] = sample;
-                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                    heightmapMesh.xyz[xyz++] = k * cellSize;
+                    heightmapMesh.xyz[xyz++] = sample;
+                    heightmapMesh.xyz[xyz++] = gridSize * cellSize;
 
-                    reusableMesh.xyz[xyz++] = k * cellSize;
-                    reusableMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
-                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                    heightmapMesh.xyz[xyz++] = k * cellSize;
+                    heightmapMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
+                    heightmapMesh.xyz[xyz++] = gridSize * cellSize;
                 }
             }
         }
@@ -364,24 +379,24 @@ public class FarRegionRenderer : IRenderer
         if (neighborFound[2] && !GridSizesMatch(sourceData, neighborCache[2].SourceData))
         {
             // Use SE corner heights from fine and neighbor SE
-            float fineHeight = reusableMesh.xyz[(gridSize * (gridSize + 1) + gridSize) * 3 + 1];
+            float fineHeight = heightmapMesh.xyz[(gridSize * (gridSize + 1) + gridSize) * 3 + 1];
             float neighborHeight = neighborCache[2].SourceData.Heightmap.Points[0];
 
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
-            reusableMesh.xyz[xyz++] = fineHeight;
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = fineHeight;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
 
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
-            reusableMesh.xyz[xyz++] = neighborHeight;
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = neighborHeight;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
 
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
-            reusableMesh.xyz[xyz++] = fineHeight;
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = fineHeight;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
 
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
-            reusableMesh.xyz[xyz++] = neighborHeight;
-            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
+            heightmapMesh.xyz[xyz++] = neighborHeight;
+            heightmapMesh.xyz[xyz++] = gridSize * cellSize;
         }
 
         // Try to reuse cached indices
@@ -513,15 +528,15 @@ public class FarRegionRenderer : IRenderer
         }
 
         // Apply cached indices
-        reusableMesh.SetIndicesCount(cachedIndices.Length);
-        reusableMesh.Indices = cachedIndices;
+        heightmapMesh.SetIndicesCount(cachedIndices.Length);
+        heightmapMesh.Indices = cachedIndices;
 
         if (canUpdate)
         {
             // Update existing mesh
             try
             {
-                capi.Render.UpdateMesh(existingData.MeshRef, reusableMesh);
+                capi.Render.UpdateMesh(existingData.MeshRef, heightmapMesh);
                 existingData.SourceData = sourceData;
                 existingData.LastRebuildTime = nowMs;
                 activeRegionModels[sourceData.RegionIndex] = existingData;
@@ -537,7 +552,7 @@ public class FarRegionRenderer : IRenderer
                     {
                         SourceData = sourceData,
                         Position = new Vec3d(sourceData.RegionX * sourceData.RegionSize, 0.0f, sourceData.RegionZ * sourceData.RegionSize),
-                        MeshRef = capi.Render.UploadMesh(reusableMesh),
+                        MeshRef = capi.Render.UploadMesh(heightmapMesh),
                         GridSize = gridSize,
                         LastRebuildTime = nowMs,
                     };
@@ -567,7 +582,7 @@ public class FarRegionRenderer : IRenderer
                             0.0f,
                             sourceData.RegionZ * sourceData.RegionSize
                             ),
-                    MeshRef = capi.Render.UploadMesh(reusableMesh),
+                    MeshRef = capi.Render.UploadMesh(heightmapMesh),
                     GridSize = gridSize,
                     LastRebuildTime = nowMs,
                 };
@@ -627,6 +642,8 @@ public class FarRegionRenderer : IRenderer
     public void Dispose()
     {
         ClearLoadedRegions();
+        heightmapMesh.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private void UpdateLODLevels(Vec3d camPos)
@@ -635,16 +652,11 @@ public class FarRegionRenderer : IRenderer
         foreach (var pair in activeRegionModels)
         {
             var regionData = pair.Value.SourceData;
-            Vec3d regionCenter = new Vec3d(
-                regionData.RegionX * regionData.RegionSize + regionData.RegionSize / 2.0,
-                0,
-                regionData.RegionZ * regionData.RegionSize + regionData.RegionSize / 2.0
-            );
-            double distSq = camPos.SquareDistanceTo(regionCenter);
-            
+            double distSq = camPos.SquareDistanceTo(regionData.GetCenterPos());
+
             int baseGridSize = regionData.Heightmap.GridSize;
             int currentGridSize = pair.Value.GridSize;
-            
+
             // Determine what LOD level should be
             int targetGridSize = baseGridSize;
             if (distSq > 4096 * 4096 * 1.1) // 10% hysteresis
@@ -655,7 +667,7 @@ public class FarRegionRenderer : IRenderer
             {
                 targetGridSize = Math.Max(32, baseGridSize / 2);
             }
-            
+
             // Rebuild if LOD changed
             if (targetGridSize != currentGridSize)
             {

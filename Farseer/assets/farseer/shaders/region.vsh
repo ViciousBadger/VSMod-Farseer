@@ -37,7 +37,7 @@ void main()
     float distStart = max(viewDistance * 0.785, minDrawDistance);
     dist = (length(worldPos.xz) - distStart) / (farViewDistance - distStart - 512);
 
-    // Wider, smoother transition zone
+    // Makes the transition far less jank by mashing the far terrain into the ground at close range
     float transitionZone = smoothstep(0.0, 0.25, dist);
     float transitionCurve = transitionZone * transitionZone * transitionZone; // Cubic for extra smoothness
     
