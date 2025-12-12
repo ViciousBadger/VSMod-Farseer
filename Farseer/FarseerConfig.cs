@@ -90,6 +90,13 @@ public class FarseerServerConfig
     private int _heightmapGridSize = 128;
     private int _maxClientViewDistance = 4096;
     private int _chunkGenQueueThreshold = 64;
+    private int _maxBatchPeekColumns = 96;
+    private int _lod1StartRegions = 12;
+    private int _lod2StartRegions = 24;
+    private int _minHeightmapGridSize = 32;
+    private int _compressionThresholdBytes = 1024;
+    private int _adaptivePeekMin = 8;
+    private int _adaptivePeekMax = 64;
 
     public int HeightmapGridSize
     {
@@ -109,9 +116,54 @@ public class FarseerServerConfig
         set => _chunkGenQueueThreshold = Math.Clamp(value, 16, 2000);
     }
 
+    public int MaxBatchPeekColumns
+    {
+        get => _maxBatchPeekColumns;
+        set => _maxBatchPeekColumns = Math.Clamp(value, 16, 512);
+    }
+
+    public int Lod1StartRegions
+    {
+        get => _lod1StartRegions;
+        set => _lod1StartRegions = Math.Clamp(value, 1, 256);
+    }
+
+    public int Lod2StartRegions
+    {
+        get => _lod2StartRegions;
+        set => _lod2StartRegions = Math.Clamp(value, 1, 512);
+    }
+
+    public int MinHeightmapGridSize
+    {
+        get => _minHeightmapGridSize;
+        set => _minHeightmapGridSize = Math.Clamp(value, 16, 256);
+    }
+
+    public int CompressionThresholdBytes
+    {
+        get => _compressionThresholdBytes;
+        set => _compressionThresholdBytes = Math.Clamp(value, 256, 1_000_000);
+    }
+
+    public int AdaptivePeekMin
+    {
+        get => _adaptivePeekMin;
+        set => _adaptivePeekMin = Math.Clamp(value, 4, 256);
+    }
+
+    public int AdaptivePeekMax
+    {
+        get => _adaptivePeekMax;
+        set => _adaptivePeekMax = Math.Clamp(value, 8, 512);
+    }
+
     public bool GenRealChunks = false;
     public bool DisableProgressLogging = false;
     public bool StoreBiomeData = true; // Store biome colors for more accurate terrain coloring
+    public bool EnableBatchPeek = true;
+    public bool EnableDistanceLod = true;
+    public bool EnableCompression = true;
 
     // Quality preset helper
     public void SetQuality(FarseerQuality quality)

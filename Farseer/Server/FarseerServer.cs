@@ -23,6 +23,7 @@ public class FarseerServer : IDisposable
 
     FarRegionProvider regionProvider;
     Dictionary<IServerPlayer, FarseePlayer> playersWithFarseer = new Dictionary<IServerPlayer, FarseePlayer>();
+    HashSet<IServerPlayer> compressionCapable = new();
 
     // Reusable collections to avoid allocations
     private Dictionary<long, int> regionPrioritiesCombined = new();
@@ -66,6 +67,15 @@ public class FarseerServer : IDisposable
             config = new FarseerServerConfig();
         }
 
+        regionProvider.ApplyAdaptivePeekConfig(config);
+
+        // Optional: enable batch peeking via Harmony to reduce pause/resume overhead
+        if (config.EnableBatchPeek)
+        {
+            BatchPeekPatch.Configure(config.MaxBatchPeekColumns);
+            BatchPeekPatch.Apply();
+        }
+
         // Validate and set world config value
         try
         {
@@ -98,6 +108,15 @@ public class FarseerServer : IDisposable
         else
         {
             playersWithFarseer.Add(fromPlayer, new FarseePlayer() { ServerPlayer = fromPlayer, PlayerConfig = request.PlayerConfig });
+        }
+
+        if (request.SupportsCompressedFarRegions)
+        {
+            compressionCapable.Add(fromPlayer);
+        }
+        else
+        {
+            compressionCapable.Remove(fromPlayer);
         }
 
         UpdateRegionsInView();
@@ -143,17 +162,26 @@ public class FarseerServer : IDisposable
 
     private void UpdateRegionsInView()
     {
+        var profiler = sapi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter("farseer-update-regions");
+
         // Select highest priority for each region.
         regionPrioritiesCombined.Clear();
 
         foreach (var player in playersWithFarseer.Values)
         {
-            var regionsInViewNow = GetRegionsInViewOfPlayer(player, out Dictionary<long, int> regionPrioritiesForPlayer);
+            var regionsInViewNow = GetRegionsInViewOfPlayer(player, out Dictionary<long, int> regionPrioritiesForPlayer, out Dictionary<long, float> regionDistances);
             var regionsInViewBefore = player.RegionsInView;
             player.RegionsInView = regionsInViewNow;
 
             foreach (var pair in regionPrioritiesForPlayer)
             {
+                // Distance-based grid size selection per region
+                float dist = regionDistances.TryGetValue(pair.Key, out float d) ? d : 0f;
+                int gridSize = ComputeGridSizeForDistance(dist);
+                regionProvider.SetDesiredGridSize(pair.Key, gridSize);
+
                 if (regionPrioritiesCombined.TryGetValue(pair.Key, out int existingPrio))
                 {
                     if (pair.Value < existingPrio)
@@ -181,10 +209,16 @@ public class FarseerServer : IDisposable
             }
         }
         regionProvider.Reprioritize(regionPrioritiesCombined);
+
+        if (profile) profiler.Leave();
     }
 
     private void LoadRegionForPlayersInView(FarRegionData regionData)
     {
+        var profiler = sapi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter("farseer-region-ready");
+
         relevantPlayers.Clear();
         
         foreach (var player in playersWithFarseer.Values)
@@ -204,6 +238,8 @@ public class FarseerServer : IDisposable
         {
             regionSendBuffer.Insert(regionData, relevantPlayers.ToArray());
         }
+
+        if (profile) profiler.Leave();
     }
 
     private void UnloadRegionsForPlayer(FarseePlayer player, List<long> regionIndices)
@@ -232,6 +268,25 @@ public class FarseerServer : IDisposable
         regionProvider.PruneRegionCache(regionsToKeep);
     }
 
+    private int ComputeGridSizeForDistance(float regionDistance)
+    {
+        var cfg = modSystem.Server.Config;
+        if (!cfg.EnableDistanceLod) return cfg.HeightmapGridSize;
+
+        int baseGrid = cfg.HeightmapGridSize;
+        int minGrid = cfg.MinHeightmapGridSize;
+
+        if (regionDistance >= cfg.Lod2StartRegions)
+        {
+            return Math.Max(minGrid, baseGrid / 4);
+        }
+        if (regionDistance >= cfg.Lod1StartRegions)
+        {
+            return Math.Max(minGrid, baseGrid / 2);
+        }
+        return baseGrid;
+    }
+
     private void GetRegionsNewInView(HashSet<long> regionsInViewBefore, HashSet<long> regionsInViewNow, List<long> output)
     {
         output.Clear();
@@ -256,7 +311,7 @@ public class FarseerServer : IDisposable
         }
     }
 
-    private HashSet<long> GetRegionsInViewOfPlayer(FarseePlayer player, out Dictionary<long, int> priorities)
+    private HashSet<long> GetRegionsInViewOfPlayer(FarseePlayer player, out Dictionary<long, int> priorities, out Dictionary<long, float> distances)
     {
         var playerBlockPos = player.ServerPlayer.Entity.Pos.AsBlockPos;
         var playerRegionIdx = sapi.WorldManager.MapRegionIndex2DByBlockPos(playerBlockPos.X, playerBlockPos.Z);
@@ -266,6 +321,7 @@ public class FarseerServer : IDisposable
 
         var result = new HashSet<long>();
         priorities = new();
+        distances = new();
         var thisPriority = 0;
 
         var walker = new SpiralWalker(new Coord2D(), farViewDistanceInRegions);
@@ -279,6 +335,7 @@ public class FarseerServer : IDisposable
                 var regionIdx = sapi.WorldManager.MapRegionIndex2D(thisRegionX, thisRegionZ);
                 result.Add(regionIdx);
                 priorities.Add(regionIdx, thisPriority++);
+                distances[regionIdx] = coord.Len();
             }
         }
         return result;
@@ -289,6 +346,7 @@ public class FarseerServer : IDisposable
         if (playersWithFarseer.ContainsKey(byPlayer))
         {
             playersWithFarseer.Remove(byPlayer);
+            compressionCapable.Remove(byPlayer);
         }
     }
 
@@ -296,4 +354,6 @@ public class FarseerServer : IDisposable
     {
         this.regionProvider?.Dispose();
     }
+
+    public bool IsCompressionCapable(IServerPlayer player) => compressionCapable.Contains(player);
 }

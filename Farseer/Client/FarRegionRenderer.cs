@@ -14,6 +14,7 @@ public class FarRegionRenderer : IRenderer
         public Vec3d Position { get; set; }
         public MeshRef MeshRef { get; set; }
         public int GridSize { get; set; }
+        public double LastRebuildTime { get; set; }
     }
 
     public double RenderOrder => 0.36;
@@ -31,6 +32,7 @@ public class FarRegionRenderer : IRenderer
     
     // Reusable mesh data for updates
     private MeshData reusableMesh = new MeshData(false);
+    private readonly Dictionary<(int grid, int seamMask, bool skirts), int[]> indexCache = new();
     
     // Cache for neighbor lookups
     private PerModelData[] neighborCache = new PerModelData[4];
@@ -39,6 +41,8 @@ public class FarRegionRenderer : IRenderer
     // LOD update tracking
     private double lodUpdateAccumulator = 0;
     private const double LOD_UPDATE_INTERVAL = 1.0; // Check LOD every 1 second
+    private const double REBUILD_THROTTLE_MS = 350.0;
+    private const float SKIRT_DEPTH = 3.0f;
 
     public FarRegionRenderer(FarseerModSystem modSystem, ICoreClientAPI capi)
     {
@@ -92,8 +96,19 @@ public class FarRegionRenderer : IRenderer
         return (long)(rZ + offsetZ) * (long)regionMapSize + (long)(rX + offsetX);
     }
 
+    private bool IsSkirtEnabled() => SKIRT_DEPTH > 0.01f;
+
     public void BuildRegion(FarRegionData sourceData, bool isRebuild = false)
     {
+        var profiler = capi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter(isRebuild ? "farseer-buildregion-rebuild" : "farseer-buildregion");
+
+        double nowMs = capi.World.ElapsedMilliseconds;
+        PerModelData existingData;
+        bool hasExisting = activeRegionModels.TryGetValue(sourceData.RegionIndex, out existingData);
+        int previousGridSize = hasExisting ? existingData.GridSize : -1;
+
         bool GridSizesMatch(FarRegionData regionA, FarRegionData regionB)
         {
             return regionA.Heightmap.GridSize == regionB.Heightmap.GridSize;
@@ -114,7 +129,7 @@ public class FarRegionRenderer : IRenderer
         
         // Get current LOD if region exists
         int currentLOD = 0; // 0 = full, 1 = half, 2 = quarter
-        if (activeRegionModels.TryGetValue(sourceData.RegionIndex, out PerModelData existingData))
+        if (hasExisting)
         {
             if (existingData.GridSize == baseGridSize) currentLOD = 0;
             else if (existingData.GridSize == Math.Max(32, baseGridSize / 2)) currentLOD = 1;
@@ -151,22 +166,73 @@ public class FarRegionRenderer : IRenderer
         float sourceGridSize = sourceData.Heightmap.GridSize;
         float sourceCellSize = sourceData.RegionSize / sourceGridSize;
 
-        var vertexCount = (gridSize + 1) * (gridSize + 1);
-        var indicesCount = gridSize * gridSize * 6;
+        // Base grid vertex/index counts
+        var baseVertexCount = (gridSize + 1) * (gridSize + 1);
+        var baseIndicesCount = gridSize * gridSize * 6;
+
+        // Seam vertices/indices when LOD differs
+        int seamVertices = 0;
+        int seamIndices = 0;
+        int seamMask = 0; // bit 0: east, bit1: south, bit2: corner
+
+        // Count seam data for each edge with differing grid sizes
+        if (neighborFound[0] && !GridSizesMatch(sourceData, neighborCache[0].SourceData))
+        {
+            // East edge seam: one strip of gridSize quads
+            seamVertices += (gridSize + 1) * 2;
+            seamIndices += gridSize * 6;
+            if (IsSkirtEnabled())
+            {
+                seamVertices += (gridSize + 1) * 2;
+                seamIndices += gridSize * 6;
+            }
+            seamMask |= 1;
+        }
+        if (neighborFound[1] && !GridSizesMatch(sourceData, neighborCache[1].SourceData))
+        {
+            // South edge seam
+            seamVertices += (gridSize + 1) * 2;
+            seamIndices += gridSize * 6;
+            if (IsSkirtEnabled())
+            {
+                seamVertices += (gridSize + 1) * 2;
+                seamIndices += gridSize * 6;
+            }
+            seamMask |= 2;
+        }
+        if (neighborFound[2] && !GridSizesMatch(sourceData, neighborCache[2].SourceData))
+        {
+            // Corner seam (single quad strip)
+            seamVertices += 4;
+            seamIndices += 6;
+            seamMask |= 4;
+        }
+
+        var vertexCount = baseVertexCount + seamVertices;
+        var indicesCount = baseIndicesCount + seamIndices;
+
+        if (isRebuild && hasExisting && existingData.GridSize == gridSize && (nowMs - existingData.LastRebuildTime) < REBUILD_THROTTLE_MS)
+        {
+            if (profile) profiler.Leave();
+            return;
+        }
 
         // Check if we can update existing mesh
-        bool canUpdate = activeRegionModels.TryGetValue(sourceData.RegionIndex, out existingData) &&
-                        existingData.GridSize == gridSize;
+        bool canUpdate = hasExisting && existingData.GridSize == gridSize;
 
         if (canUpdate)
         {
-            // Only update vertices, reuse indices
+            // Only update vertices, reuse capacity
             reusableMesh.SetVerticesCount(vertexCount);
             if (reusableMesh.xyz == null || reusableMesh.xyz.Length != vertexCount * 3)
             {
                 reusableMesh.xyz = new float[vertexCount * 3];
             }
-            reusableMesh.Indices = null; // Don't update indices
+            reusableMesh.SetIndicesCount(indicesCount);
+            if (reusableMesh.Indices == null || reusableMesh.Indices.Length != indicesCount)
+            {
+                reusableMesh.Indices = new int[indicesCount];
+            }
         }
         else
         {
@@ -220,26 +286,235 @@ public class FarRegionRenderer : IRenderer
             }
         }
 
-        if (!canUpdate)
+        // Build seam vertices (east, south, skirts, corner)
+        // East seam: x = gridSize, interpolate neighbor coarse edge to fine
+        if (neighborFound[0] && !GridSizesMatch(sourceData, neighborCache[0].SourceData))
         {
-            // Build indices only for new meshes
-            int index = 0;
+            float neighborCell = neighborCache[0].GridSize > 0 ? sourceData.RegionSize / neighborCache[0].GridSize : cellSize;
+            for (int k = 0; k <= gridSize; k++)
+            {
+                // top strip (fine edge)
+                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                reusableMesh.xyz[xyz++] = reusableMesh.xyz[(k * (gridSize + 1) + gridSize) * 3 + 1]; // reuse height
+                reusableMesh.xyz[xyz++] = k * cellSize;
+
+                // bottom strip (coarse neighbor edge sample)
+                int neighborIdx = Math.Min(neighborCache[0].GridSize - 1, (int)(k * (neighborCache[0].GridSize - 1f) / gridSize));
+                float sample = neighborCache[0].SourceData.Heightmap.Points[neighborIdx * neighborCache[0].GridSize];
+                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                reusableMesh.xyz[xyz++] = sample;
+                reusableMesh.xyz[xyz++] = k * cellSize;
+            }
+
+            if (IsSkirtEnabled())
+            {
+                for (int k = 0; k <= gridSize; k++)
+                {
+                    // top of skirt = neighbor edge height
+                    int neighborIdx = Math.Min(neighborCache[0].GridSize - 1, (int)(k * (neighborCache[0].GridSize - 1f) / gridSize));
+                    float sample = neighborCache[0].SourceData.Heightmap.Points[neighborIdx * neighborCache[0].GridSize];
+                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                    reusableMesh.xyz[xyz++] = sample;
+                    reusableMesh.xyz[xyz++] = k * cellSize;
+
+                    // bottom of skirt
+                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                    reusableMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
+                    reusableMesh.xyz[xyz++] = k * cellSize;
+                }
+            }
+        }
+
+        // South seam: z = gridSize
+        if (neighborFound[1] && !GridSizesMatch(sourceData, neighborCache[1].SourceData))
+        {
+            for (int k = 0; k <= gridSize; k++)
+            {
+                // left strip (fine edge)
+                reusableMesh.xyz[xyz++] = k * cellSize;
+                reusableMesh.xyz[xyz++] = reusableMesh.xyz[(gridSize * (gridSize + 1) + k) * 3 + 1];
+                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+
+                // right strip (coarse neighbor edge sample)
+                int neighborIdx = Math.Min(neighborCache[1].GridSize - 1, (int)(k * (neighborCache[1].GridSize - 1f) / gridSize));
+                float sample = neighborCache[1].SourceData.Heightmap.Points[neighborIdx];
+                reusableMesh.xyz[xyz++] = k * cellSize;
+                reusableMesh.xyz[xyz++] = sample;
+                reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            }
+
+            if (IsSkirtEnabled())
+            {
+                for (int k = 0; k <= gridSize; k++)
+                {
+                    int neighborIdx = Math.Min(neighborCache[1].GridSize - 1, (int)(k * (neighborCache[1].GridSize - 1f) / gridSize));
+                    float sample = neighborCache[1].SourceData.Heightmap.Points[neighborIdx];
+                    reusableMesh.xyz[xyz++] = k * cellSize;
+                    reusableMesh.xyz[xyz++] = sample;
+                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+
+                    reusableMesh.xyz[xyz++] = k * cellSize;
+                    reusableMesh.xyz[xyz++] = sample - SKIRT_DEPTH;
+                    reusableMesh.xyz[xyz++] = gridSize * cellSize;
+                }
+            }
+        }
+
+        // Corner seam: use NE/SW interpolation (simplified)
+        if (neighborFound[2] && !GridSizesMatch(sourceData, neighborCache[2].SourceData))
+        {
+            // Use SE corner heights from fine and neighbor SE
+            float fineHeight = reusableMesh.xyz[(gridSize * (gridSize + 1) + gridSize) * 3 + 1];
+            float neighborHeight = neighborCache[2].SourceData.Heightmap.Points[0];
+
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            reusableMesh.xyz[xyz++] = fineHeight;
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            reusableMesh.xyz[xyz++] = neighborHeight;
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            reusableMesh.xyz[xyz++] = fineHeight;
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+            reusableMesh.xyz[xyz++] = neighborHeight;
+            reusableMesh.xyz[xyz++] = gridSize * cellSize;
+        }
+
+        // Try to reuse cached indices
+        var cacheKey = (gridSize, seamMask, IsSkirtEnabled());
+        if (!indexCache.TryGetValue(cacheKey, out int[] cachedIndices) || cachedIndices.Length != indicesCount)
+        {
+            var indices = new int[indicesCount];
+            int idx = 0;
             for (int i = 0; i < gridSize; i++)
             {
                 for (int j = 0; j < gridSize; j++)
                 {
                     // First triangle of the cell
-                    reusableMesh.Indices[index++] = i * (gridSize + 1) + j;           // Top-left
-                    reusableMesh.Indices[index++] = (i + 1) * (gridSize + 1) + j;     // Bottom-left
-                    reusableMesh.Indices[index++] = i * (gridSize + 1) + j + 1;       // Top-right
+                    indices[idx++] = i * (gridSize + 1) + j;           // Top-left
+                    indices[idx++] = (i + 1) * (gridSize + 1) + j;     // Bottom-left
+                    indices[idx++] = i * (gridSize + 1) + j + 1;       // Top-right
 
                     // Second triangle of the cell
-                    reusableMesh.Indices[index++] = i * (gridSize + 1) + j + 1;       // Top-right
-                    reusableMesh.Indices[index++] = (i + 1) * (gridSize + 1) + j;     // Bottom-left
-                    reusableMesh.Indices[index++] = (i + 1) * (gridSize + 1) + j + 1; // Bottom-right
+                    indices[idx++] = i * (gridSize + 1) + j + 1;       // Top-right
+                    indices[idx++] = (i + 1) * (gridSize + 1) + j;     // Bottom-left
+                    indices[idx++] = (i + 1) * (gridSize + 1) + j + 1; // Bottom-right
                 }
             }
+
+            int seamStart = baseIndicesCount;
+            int seamVertexCursor = baseVertexCount;
+
+            // East seam
+            if ((seamMask & 1) != 0)
+            {
+                for (int k = 0; k < gridSize; k++)
+                {
+                    int v0 = seamVertexCursor + k;
+                    int v1 = seamVertexCursor + k + 1;
+                    int v2 = seamVertexCursor + (gridSize + 1) + k;
+                    int v3 = seamVertexCursor + (gridSize + 1) + k + 1;
+
+                    indices[seamStart++] = v0;
+                    indices[seamStart++] = v2;
+                    indices[seamStart++] = v1;
+
+                    indices[seamStart++] = v1;
+                    indices[seamStart++] = v2;
+                    indices[seamStart++] = v3;
+                }
+                seamVertexCursor += (gridSize + 1) * 2;
+
+                if (cacheKey.Item3) // skirts
+                {
+                    for (int k = 0; k < gridSize; k++)
+                    {
+                        int v0 = seamVertexCursor + k;
+                        int v1 = seamVertexCursor + k + 1;
+                        int v2 = seamVertexCursor + (gridSize + 1) + k;
+                        int v3 = seamVertexCursor + (gridSize + 1) + k + 1;
+
+                        indices[seamStart++] = v0;
+                        indices[seamStart++] = v2;
+                        indices[seamStart++] = v1;
+
+                        indices[seamStart++] = v1;
+                        indices[seamStart++] = v2;
+                        indices[seamStart++] = v3;
+                    }
+                    seamVertexCursor += (gridSize + 1) * 2;
+                }
+            }
+
+            // South seam
+            if ((seamMask & 2) != 0)
+            {
+                for (int k = 0; k < gridSize; k++)
+                {
+                    int v0 = seamVertexCursor + k;
+                    int v1 = seamVertexCursor + k + 1;
+                    int v2 = seamVertexCursor + (gridSize + 1) + k;
+                    int v3 = seamVertexCursor + (gridSize + 1) + k + 1;
+
+                    indices[seamStart++] = v0;
+                    indices[seamStart++] = v2;
+                    indices[seamStart++] = v1;
+
+                    indices[seamStart++] = v1;
+                    indices[seamStart++] = v2;
+                    indices[seamStart++] = v3;
+                }
+                seamVertexCursor += (gridSize + 1) * 2;
+
+                if (cacheKey.Item3)
+                {
+                    for (int k = 0; k < gridSize; k++)
+                    {
+                        int v0 = seamVertexCursor + k;
+                        int v1 = seamVertexCursor + k + 1;
+                        int v2 = seamVertexCursor + (gridSize + 1) + k;
+                        int v3 = seamVertexCursor + (gridSize + 1) + k + 1;
+
+                        indices[seamStart++] = v0;
+                        indices[seamStart++] = v2;
+                        indices[seamStart++] = v1;
+
+                        indices[seamStart++] = v1;
+                        indices[seamStart++] = v2;
+                        indices[seamStart++] = v3;
+                    }
+                    seamVertexCursor += (gridSize + 1) * 2;
+                }
+            }
+
+            // Corner seam
+            if ((seamMask & 4) != 0)
+            {
+                int v0 = seamVertexCursor + 0;
+                int v1 = seamVertexCursor + 1;
+                int v2 = seamVertexCursor + 2;
+                int v3 = seamVertexCursor + 3;
+
+                indices[seamStart++] = v0;
+                indices[seamStart++] = v2;
+                indices[seamStart++] = v1;
+
+                indices[seamStart++] = v1;
+                indices[seamStart++] = v2;
+                indices[seamStart++] = v3;
+            }
+
+            cachedIndices = indices;
+            indexCache[cacheKey] = cachedIndices;
         }
+
+        // Apply cached indices
+        reusableMesh.SetIndicesCount(cachedIndices.Length);
+        reusableMesh.Indices = cachedIndices;
 
         if (canUpdate)
         {
@@ -248,6 +523,7 @@ public class FarRegionRenderer : IRenderer
             {
                 capi.Render.UpdateMesh(existingData.MeshRef, reusableMesh);
                 existingData.SourceData = sourceData;
+                existingData.LastRebuildTime = nowMs;
                 activeRegionModels[sourceData.RegionIndex] = existingData;
             }
             catch (Exception e)
@@ -263,6 +539,7 @@ public class FarRegionRenderer : IRenderer
                         Position = new Vec3d(sourceData.RegionX * sourceData.RegionSize, 0.0f, sourceData.RegionZ * sourceData.RegionSize),
                         MeshRef = capi.Render.UploadMesh(reusableMesh),
                         GridSize = gridSize,
+                        LastRebuildTime = nowMs,
                     };
                 }
                 catch (Exception e2)
@@ -292,6 +569,7 @@ public class FarRegionRenderer : IRenderer
                             ),
                     MeshRef = capi.Render.UploadMesh(reusableMesh),
                     GridSize = gridSize,
+                    LastRebuildTime = nowMs,
                 };
             }
             catch (Exception e)
@@ -301,7 +579,9 @@ public class FarRegionRenderer : IRenderer
             }
         }
 
-        if (!isRebuild)
+        bool gridSizeChanged = previousGridSize < 0 || previousGridSize != gridSize;
+
+        if (!isRebuild && gridSizeChanged)
         {
             // Re-build neighbours that are affected by this new data.
             var westIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, 0, sourceData.RegionMapSize);
@@ -322,6 +602,8 @@ public class FarRegionRenderer : IRenderer
                 BuildRegion(northWestData.SourceData, true);
             }
         }
+
+        if (profile) profiler.Leave();
     }
 
     public void UnloadRegion(long regionIdx)

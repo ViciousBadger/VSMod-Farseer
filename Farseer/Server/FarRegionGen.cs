@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
@@ -42,6 +43,8 @@ public class FarRegionGen
     private int chunkSize;
     private int regionSize;
     private int seaLevel;
+    private int adaptivePeekMin;
+    private int adaptivePeekMax;
 
     public FarRegionGen(FarseerModSystem modSystem, ICoreServerAPI sapi)
     {
@@ -55,9 +58,11 @@ public class FarRegionGen
         this.chunkSize = sapi.WorldManager.ChunkSize;
         this.regionSize = sapi.WorldManager.RegionSize;
         this.seaLevel = sapi.World.SeaLevel;
+        this.adaptivePeekMin = 8;
+        this.adaptivePeekMax = 64;
     }
 
-    public void StartGeneratingRegion(long regionIdx)
+    public void StartGeneratingRegion(long regionIdx, int gridSize)
     {
         lock(queueLock)
         {
@@ -67,7 +72,6 @@ public class FarRegionGen
             var chunkStartX = regionPos.X * chunksInRegionColumn;
             var chunkStartZ = regionPos.Z * chunksInRegionColumn;
 
-            int gridSize = modSystem.Server.Config.HeightmapGridSize;
             bool storeBiomes = modSystem.Server.Config.StoreBiomeData;
             var newInProgressRegion = new InProgressRegion(regionIdx, gridSize, storeBiomes);
 
@@ -146,6 +150,10 @@ public class FarRegionGen
 
     private void LoadNextFarChunksInQueue()
     {
+        var profiler = sapi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter("farseer-far-loadqueue");
+
         InProgressRegion nextRegionInQueue = null;
         
         lock(queueLock)
@@ -185,7 +193,8 @@ public class FarRegionGen
 
         // Throttle: Only request a limited number of chunks per tick to avoid overwhelming the system
         int chunksRequestedThisTick = 0;
-        int maxChunksPerTick = 32; // Limit to 32 chunk requests per tick
+        int maxChunksPerTick = ComputeAdaptivePeekBudget();
+        var coordsToPeek = new List<Vec2i>(chunksInRegionArea);
 
         for (int z = 0; z < chunksInRegionColumn; z++)
         {
@@ -206,36 +215,74 @@ public class FarRegionGen
                     }
                     else
                     {
-                        // Test if the chunk exists first. It's faster to load
-                        // existing chunks than to peek. (Peek ignores saved data)
-                        sapi.WorldManager.TestMapChunkExists(targetChunkX, targetChunkZ, (exists) =>
-                        {
-                            if (exists)
-                            {
-                                sapi.WorldManager.LoadChunkColumn(targetChunkX, targetChunkZ);
-                            }
-                            else
-                            {
-                                // It seems peek is about ~20-60% faster than
-                                // full chunk generation and less taxing on the
-                                // server (not to mention disk space)
-                                sapi.WorldManager.PeekChunkColumn(targetChunkX, targetChunkZ, new ChunkPeekOptions()
-                                {
-                                    UntilPass = EnumWorldGenPass.Terrain,
-                                    OnGenerated = OnChunkColumnPeeked,
-                                });
-                                peekWaiting.Add(targetChunkIdx);
-                            }
-                        });
+                        coordsToPeek.Add(new Vec2i(targetChunkX, targetChunkZ));
+                        peekWaiting.Add(targetChunkIdx);
                         chunksRequestedThisTick++;
                     }
                 }
             }
         }
+
+        if (coordsToPeek.Count > 0)
+        {
+            if (profile) profiler.Mark("farseer-batch-peek-enqueue");
+
+            // Try to batch through the chunk thread; fall back to vanilla peek if the patch is unavailable
+            var enqueued = BatchPeekPatch.Enqueue(coordsToPeek, EnumWorldGenPass.Terrain, new TreeAttribute(), OnChunkColumnPeeked);
+            if (!enqueued)
+            {
+                for (int i = 0; i < coordsToPeek.Count; i++)
+                {
+                    var coord = coordsToPeek[i];
+                    sapi.WorldManager.PeekChunkColumn(coord.X, coord.Y, new ChunkPeekOptions()
+                    {
+                        UntilPass = EnumWorldGenPass.Terrain,
+                        OnGenerated = OnChunkColumnPeeked,
+                    });
+                }
+            }
+        }
+
+        if (profile) profiler.Leave();
+    }
+
+    private int ComputeAdaptivePeekBudget()
+    {
+        // Base between min and max from config
+        int min = adaptivePeekMin;
+        int max = adaptivePeekMax;
+
+        // If chunk gen queue is heavy, back off
+        int generating = sapi.WorldManager.CurrentGeneratingChunkCount;
+        if (generating > modSystem.Server.Config.ChunkGenQueueThreshold)
+        {
+            return min;
+        }
+
+        // If idle, use max
+        if (generating < modSystem.Server.Config.ChunkGenQueueThreshold / 4)
+        {
+            return max;
+        }
+
+        // Linear interpolate between min and max based on load
+        float load = (float)generating / modSystem.Server.Config.ChunkGenQueueThreshold;
+        load = GameMath.Clamp(load, 0f, 1f);
+        return (int)GameMath.Lerp(min, max, 1f - load);
+    }
+
+    public void SetAdaptivePeekBounds(int min, int max)
+    {
+        adaptivePeekMin = GameMath.Clamp(min, 4, 256);
+        adaptivePeekMax = GameMath.Clamp(max, adaptivePeekMin, 512);
     }
 
     private void OnChunkColumnPeeked(Dictionary<Vec2i, IServerChunk[]> columnsByChunkCoordinate)
     {
+        var profiler = sapi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter("farseer-far-peeked");
+
         foreach (var pair in columnsByChunkCoordinate)
         {
             var chunkIdx = sapi.WorldManager.MapChunkIndex2D(pair.Key.X, pair.Key.Y);
@@ -256,6 +303,8 @@ public class FarRegionGen
                 }
             }
         }
+
+        if (profile) profiler.Leave();
     }
 
     private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] chunks)
@@ -283,6 +332,10 @@ public class FarRegionGen
 
     private void PopulateRegionFromChunk(InProgressRegion region, int chunkX, int chunkZ, IMapChunk chunk)
     {
+        var profiler = sapi.World.FrameProfiler;
+        bool profile = profiler?.Enabled == true;
+        if (profile) profiler.Enter("farseer-far-populate");
+
         if (chunk?.WorldGenTerrainHeightMap == null) return;
 
         var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(region.RegionIdx);
@@ -345,6 +398,8 @@ public class FarRegionGen
                 modSystem.Mod.Logger.Notification("All done!");
             }
         }
+
+        if (profile) profiler.Leave();
     }
 
     public void GenerateDummyData(long regionIdx)

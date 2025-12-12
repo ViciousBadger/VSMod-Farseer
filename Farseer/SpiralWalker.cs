@@ -51,7 +51,7 @@ public sealed class SpiralWalker : IEnumerable<Coord2D>, IEnumerator<Coord2D>
 
     public bool MoveNext()
     {
-        var done = _x < -_radius || _x > _radius || _z < -_radius || _x > _radius;
+        var done = _x < -_radius || _x > _radius || _z < -_radius || _z > _radius;
 
         _currentCoordinate = new Coord2D(_x, _z);
 

@@ -107,6 +107,19 @@ public class FarseerClient : IDisposable
 
     private void OnReceiveFarRegionData(FarRegionData data)
     {
+        // Decompress if needed
+        if (data.Compressed)
+        {
+            if (data.Heightmap != null && data.Heightmap.Points == null && data.CompressedPoints != null)
+            {
+                data.Heightmap.Points = DecompressToIntArray(data.CompressedPoints, data.Heightmap.GridSize * data.Heightmap.GridSize);
+            }
+            if (data.Heightmap != null && data.Heightmap.Colors == null && data.CompressedColors != null)
+            {
+                data.Heightmap.Colors = DecompressToIntArray(data.CompressedColors, data.Heightmap.GridSize * data.Heightmap.GridSize);
+            }
+        }
+
         if (config.Enabled)
         {
             renderer.BuildRegion(data);
@@ -124,6 +137,23 @@ public class FarseerClient : IDisposable
         }
     }
 
+    private int[] DecompressToIntArray(byte[] compressed, int expectedLength)
+    {
+        using var input = new System.IO.MemoryStream(compressed);
+        using var ds = new System.IO.Compression.DeflateStream(input, System.IO.Compression.CompressionMode.Decompress);
+        var buffer = new byte[expectedLength * sizeof(int)];
+        int read;
+        int offset = 0;
+        while ((read = ds.Read(buffer, offset, buffer.Length - offset)) > 0)
+        {
+            offset += read;
+            if (offset >= buffer.Length) break;
+        }
+        var ints = new int[expectedLength];
+        Buffer.BlockCopy(buffer, 0, ints, 0, buffer.Length);
+        return ints;
+    }
+
     public void Init()
     {
         var channel = capi.Network.GetChannel(FarseerModSystem.MOD_CHANNEL_NAME);
@@ -132,6 +162,7 @@ public class FarseerClient : IDisposable
             channel.SendPacket(new FarseerEnable
             {
                 PlayerConfig = config.ToServerPlayerConfig(),
+                SupportsCompressedFarRegions = true,
             });
         }
         renderer.Init();
