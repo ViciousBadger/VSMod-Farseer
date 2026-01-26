@@ -229,29 +229,34 @@ public class FarRegionGen
     var chunkStartZ = regionPos.Z * chunksInRegionColumn;
 
     int gridSize = region.Heightmap.GridSize;
+    int chunkSize = sapi.WorldManager.ChunkSize;
     float cellSize = sapi.WorldManager.RegionSize / (float)gridSize;
 
-    for (int z = 0; z < gridSize; z++)
+    // Calculate grid bounds for this chunk to avoid iterating the entire grid
+    int chunkOffsetX = chunkX - chunkStartX;
+    int chunkOffsetZ = chunkZ - chunkStartZ;
+
+    int gridStartX = (int)(chunkOffsetX * chunkSize / cellSize);
+    int gridStartZ = (int)(chunkOffsetZ * chunkSize / cellSize);
+    int gridEndX = GameMath.Min((int)((chunkOffsetX + 1) * chunkSize / cellSize), gridSize);
+    int gridEndZ = GameMath.Min((int)((chunkOffsetZ + 1) * chunkSize / cellSize), gridSize);
+
+    // Only iterate over grid cells that belong to this chunk
+    for (int z = gridStartZ; z < gridEndZ; z++)
     {
-      for (int x = 0; x < gridSize; x++)
+      for (int x = gridStartX; x < gridEndX; x++)
       {
         int offsetBlockPosX = (int)(x * cellSize);
         int offsetBlockPosZ = (int)(z * cellSize);
 
-        int targetChunkX = chunkStartX + offsetBlockPosX / sapi.WorldManager.ChunkSize;
-        int targetChunkZ = chunkStartZ + offsetBlockPosZ / sapi.WorldManager.ChunkSize;
+        int posInChunkX = offsetBlockPosX % chunkSize;
+        int posInChunkZ = offsetBlockPosZ % chunkSize;
 
-        if (targetChunkX == chunkX && targetChunkZ == chunkZ)
-        {
-          int posInChunkX = offsetBlockPosX % sapi.WorldManager.ChunkSize;
-          int posInChunkZ = offsetBlockPosZ % sapi.WorldManager.ChunkSize;
+        int chunkHeightmapCoord = posInChunkZ * chunkSize + posInChunkX;
 
-          int chunkHeightmapCoord = posInChunkZ * sapi.WorldManager.ChunkSize + posInChunkX;
-
-          var sampledHeight = chunk.WorldGenTerrainHeightMap[chunkHeightmapCoord];
-          var sampledHeightOrSea = GameMath.Max(sampledHeight, sapi.World.SeaLevel);
-          region.Heightmap.Points[z * gridSize + x] = sampledHeightOrSea;
-        }
+        var sampledHeight = chunk.WorldGenTerrainHeightMap[chunkHeightmapCoord];
+        var sampledHeightOrSea = GameMath.Max(sampledHeight, sapi.World.SeaLevel);
+        region.Heightmap.Points[z * gridSize + x] = sampledHeightOrSea;
       }
     }
 
