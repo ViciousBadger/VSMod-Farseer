@@ -1,8 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
-using Vintagestory.Client;
 using Vintagestory.Client.NoObf;
 
 namespace Farseer.Client;
@@ -23,6 +23,7 @@ public class FarRegionRenderer : IRenderer
     private readonly FarseerModSystem modSystem;
     private readonly ICoreClientAPI capi;
     private readonly Dictionary<long, PerModelData> activeRegionModels = [];
+    private readonly HashSet<long> dirtyRegions = [];
 
     private readonly Matrixf modelMat = new();
     private IShaderProgram prog;
@@ -99,12 +100,17 @@ public class FarRegionRenderer : IRenderer
         float cellSize = sourceData.RegionSize / (float)gridSize;
 
         var vertexCount = (gridSize + 1) * (gridSize + 1);
+        var xyzLength = vertexCount * 3;
         mesh.SetVerticesCount(vertexCount);
-        mesh.xyz = new float[vertexCount * 3];
 
         var indicesCount = gridSize * gridSize * 6;
         mesh.SetIndicesCount(indicesCount);
-        mesh.Indices = new int[indicesCount]; // 2 triangles per cell, 3 indices per triangle
+
+        // Rent arrays from pool to avoid GC pressure (~600KB per mesh)
+        var xyzArray = ArrayPool<float>.Shared.Rent(xyzLength);
+        var indicesArray = ArrayPool<int>.Shared.Rent(indicesCount);
+        mesh.xyz = xyzArray;
+        mesh.Indices = indicesArray;
 
         int xyz = 0;
         for (int vZ = 0; vZ <= gridSize; vZ++)
@@ -166,6 +172,12 @@ public class FarRegionRenderer : IRenderer
             activeRegionModels.Remove(sourceData.RegionIndex);
         }
 
+        var meshRef = capi.Render.UploadMesh(mesh);
+
+        // Return arrays to pool after GPU upload (data has been copied)
+        ArrayPool<float>.Shared.Return(xyzArray);
+        ArrayPool<int>.Shared.Return(indicesArray);
+
         activeRegionModels.Add(sourceData.RegionIndex, new PerModelData()
         {
             SourceData = sourceData,
@@ -174,28 +186,27 @@ public class FarRegionRenderer : IRenderer
                     0.0f,
                     sourceData.RegionZ * sourceData.RegionSize
                     ),
-            MeshRef = capi.Render.UploadMesh(mesh),
+            MeshRef = meshRef,
         });
 
         if (!isRebuild)
         {
-            // Re-build neighbours that are affected by this new data.
+            // Mark neighbours as dirty for deferred rebuild (avoids cascading rebuilds in same frame)
             var westIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, 0, sourceData.RegionMapSize);
             var northIdx = RegionNeighbourIndex(sourceData.RegionIndex, 0, -1, sourceData.RegionMapSize);
             var northWestIdx = RegionNeighbourIndex(sourceData.RegionIndex, -1, -1, sourceData.RegionMapSize);
 
-
             if (activeRegionModels.TryGetValue(northIdx, out PerModelData northData) && GridSizesMatch(sourceData, northData.SourceData))
             {
-                BuildRegion(northData.SourceData, true);
+                dirtyRegions.Add(northIdx);
             }
             if (activeRegionModels.TryGetValue(westIdx, out PerModelData westData) && GridSizesMatch(sourceData, westData.SourceData))
             {
-                BuildRegion(westData.SourceData, true);
+                dirtyRegions.Add(westIdx);
             }
             if (activeRegionModels.TryGetValue(northWestIdx, out PerModelData northWestData) && GridSizesMatch(sourceData, northWestData.SourceData))
             {
-                BuildRegion(northWestData.SourceData, true);
+                dirtyRegions.Add(northWestIdx);
             }
         }
     }
@@ -207,6 +218,21 @@ public class FarRegionRenderer : IRenderer
             model.MeshRef.Dispose();
             activeRegionModels.Remove(regionIdx);
         }
+        dirtyRegions.Remove(regionIdx);
+    }
+
+    private void FlushDirtyRegions()
+    {
+        if (dirtyRegions.Count == 0) return;
+
+        foreach (var regionIdx in dirtyRegions)
+        {
+            if (activeRegionModels.TryGetValue(regionIdx, out PerModelData data))
+            {
+                BuildRegion(data.SourceData, true);
+            }
+        }
+        dirtyRegions.Clear();
     }
 
     public void ClearLoadedRegions()
@@ -216,6 +242,7 @@ public class FarRegionRenderer : IRenderer
             regionModel.MeshRef.Dispose();
         }
         activeRegionModels.Clear();
+        dirtyRegions.Clear();
     }
 
     public void Dispose()
@@ -230,6 +257,9 @@ public class FarRegionRenderer : IRenderer
 
         var rapi = capi.Render;
         if (rapi.FrameWidth == 0) return;
+
+        // Rebuild any regions marked dirty from previous frame (deferred neighbor stitching)
+        FlushDirtyRegions();
 
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
 

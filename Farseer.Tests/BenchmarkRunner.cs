@@ -4,12 +4,13 @@ namespace Farseer.Tests;
 
 /// <summary>
 /// Entry point for running benchmarks.
-/// Run with: dotnet run -c Release
+/// Run with: dotnet run -c Release --project Farseer.Tests
 /// </summary>
 public class BenchmarkProgram
 {
     public static void Main(string[] args)
     {
-        var summary = BenchmarkRunner.Run<PopulateRegionBenchmark>();
+        // Run all benchmarks or select via command line
+        BenchmarkSwitcher.FromAssembly(typeof(BenchmarkProgram).Assembly).Run(args);
     }
 }
