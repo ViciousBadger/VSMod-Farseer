@@ -10,41 +10,35 @@ Farseer is generally well-architected with good separation of concerns between s
 
 ## Critical Issues
 
-### 1. Inefficient Heightmap Population Loop (FarRegionGen.cs:234-256)
+### 1. ~~Inefficient Heightmap Population Loop~~ (FarRegionGen.cs:225-278) ✅ FIXED
 
-**Severity: Medium-High**
+**Severity: Medium-High** | **Status: RESOLVED**
 
-The `PopulateRegionFromChunk` method iterates through the entire grid for every chunk callback, checking if each grid point belongs to the current chunk:
+~~The `PopulateRegionFromChunk` method iterates through the entire grid for every chunk callback, checking if each grid point belongs to the current chunk.~~
+
+**Solution Implemented**: The method now calculates grid bounds upfront and only iterates over grid cells that belong to the current chunk:
 
 ```csharp
-for (int z = 0; z < gridSize; z++)
-{
-    for (int x = 0; x < gridSize; x++)
-    {
-        // Calculates which chunk this point belongs to
-        int targetChunkX = chunkStartX + offsetBlockPosX / sapi.WorldManager.ChunkSize;
-        int targetChunkZ = chunkStartZ + offsetBlockPosZ / sapi.WorldManager.ChunkSize;
+// Calculate grid bounds for this chunk to avoid iterating the entire grid
+int chunkOffsetX = chunkX - chunkStartX;
+int chunkOffsetZ = chunkZ - chunkStartZ;
 
-        if (targetChunkX == chunkX && targetChunkZ == chunkZ)
-        {
-            // Only then do we sample
-        }
+int gridStartX = (int)(chunkOffsetX * chunkSize / cellSize);
+int gridStartZ = (int)(chunkOffsetZ * chunkSize / cellSize);
+int gridEndX = GameMath.Min((int)((chunkOffsetX + 1) * chunkSize / cellSize), gridSize);
+int gridEndZ = GameMath.Min((int)((chunkOffsetZ + 1) * chunkSize / cellSize), gridSize);
+
+// Only iterate over grid cells that belong to this chunk
+for (int z = gridStartZ; z < gridEndZ; z++)
+{
+    for (int x = gridStartX; x < gridEndX; x++)
+    {
+        // Sample heightmap data
     }
 }
 ```
 
-**Problem**: With a 128x128 grid (default), this iterates 16,384 times per chunk, but only a fraction of those points actually belong to the chunk being processed.
-
-**Recommendation**: Calculate the grid bounds that map to the current chunk upfront and iterate only over those points:
-
-```csharp
-// Calculate which grid points map to this chunk
-int gridStartX = (chunkX - chunkStartX) * sapi.WorldManager.ChunkSize / cellSize;
-int gridEndX = gridStartX + sapi.WorldManager.ChunkSize / cellSize;
-// ... similar for Z, then iterate only that range
-```
-
-**Impact**: Could reduce iterations by ~16x (from 16,384 to ~1,024 per chunk for typical configurations).
+**Impact**: Reduces iterations by ~256x for typical configurations (from 16,384 to ~64 per chunk with default settings).
 
 ---
 
@@ -234,15 +228,15 @@ Uses peek instead of full generation for non-existent chunks, which is 20-60% fa
 
 ## Recommendations Summary
 
-| Priority | Issue | File | Estimated Impact |
-|----------|-------|------|------------------|
-| High | Inefficient heightmap loop | FarRegionGen.cs:234-256 | ~16x fewer iterations |
-| High | Linear queue scans | BatchedPacketBuffer.cs | O(n) -> O(1) lookups |
-| Medium | Cascading mesh rebuilds | FarRegionRenderer.cs:180-200 | Reduce GPU uploads |
-| Medium | Mesh array allocations | FarRegionRenderer.cs:96-161 | Reduce GC pressure |
-| Medium | Linear queue Find() | FarRegionGen.cs:195,213 | O(n) -> O(1) lookups |
-| Low | SpiralWalker sqrt | SpiralWalker.cs:9-12 | Avoid sqrt per coord |
-| Low | LINQ in hot paths | Multiple | Reduce allocations |
+| Priority | Issue | File | Status | Estimated Impact |
+|----------|-------|------|--------|------------------|
+| ~~High~~ | ~~Inefficient heightmap loop~~ | ~~FarRegionGen.cs:225-278~~ | ✅ **FIXED** | ~256x fewer iterations |
+| High | Linear queue scans | BatchedPacketBuffer.cs | Open | O(n) -> O(1) lookups |
+| Medium | Cascading mesh rebuilds | FarRegionRenderer.cs:180-200 | Open | Reduce GPU uploads |
+| Medium | Mesh array allocations | FarRegionRenderer.cs:96-161 | Open | Reduce GC pressure |
+| Medium | Linear queue Find() | FarRegionGen.cs:195,213 | Open | O(n) -> O(1) lookups |
+| Low | SpiralWalker sqrt | SpiralWalker.cs:9-12 | Open | Avoid sqrt per coord |
+| Low | LINQ in hot paths | Multiple | Open | Reduce allocations |
 
 ---
 
