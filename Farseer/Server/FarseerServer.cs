@@ -104,7 +104,7 @@ public class FarseerServer : IDisposable
     foreach (var player in modPlayers.Values)
     {
       var oldPos = player.LastPos;
-      var newPos = player.ServerPlayer.Entity.ServerPos.XYZInt;
+      var newPos = player.ServerPlayer.Entity.Pos.XYZInt;
 
       if (oldPos != null)
       {
