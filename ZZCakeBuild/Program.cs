@@ -7,7 +7,6 @@ using Cake.Common.Tools.DotNet.Clean;
 using Cake.Common.Tools.DotNet.Publish;
 using Cake.Core;
 using Cake.Frosting;
-using Cake.Json;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Vintagestory.API.Common;
@@ -37,7 +36,7 @@ public class BuildContext : FrostingContext
     {
         BuildConfiguration = context.Argument("configuration", "Release");
         SkipJsonValidation = context.Argument("skipJsonValidation", false);
-        var modInfo = context.DeserializeJsonFromFile<ModInfo>($"../{ProjectName}/modinfo.json");
+        var modInfo = JsonConvert.DeserializeObject<ModInfo>(File.ReadAllText($"../{ProjectName}/modinfo.json"));
         Version = modInfo.Version;
         Name = modInfo.ModID;
     }
