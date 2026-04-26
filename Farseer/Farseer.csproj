@@ -8,6 +8,18 @@
     <GamePath Condition="Exists('$(VINTAGE_STORY)')">$(VINTAGE_STORY)</GamePath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
   <ItemGroup>
     <Reference Include="VintagestoryAPI">
       <HintPath>$(GamePath)\VintagestoryAPI.dll</HintPath>
