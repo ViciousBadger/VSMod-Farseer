@@ -70,7 +70,7 @@ public class FarRegionProvider : IDisposable
   {
     db.InsertRegionHeightmap(regionIdx, generatedHeightmap);
     var newRegionData = CreateDataObject(regionIdx, generatedHeightmap);
-    inMemoryRegionCache.Add(regionIdx, newRegionData);
+    inMemoryRegionCache[regionIdx] = newRegionData;
     RegionReady?.Invoke(newRegionData);
   }
 
@@ -123,6 +123,7 @@ public class FarRegionProvider : IDisposable
 
   public void Dispose()
   {
+    generator?.Dispose();
     db?.Dispose();
     GC.SuppressFinalize(this);
   }

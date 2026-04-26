@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
@@ -8,7 +9,7 @@ namespace Farseer.Server;
 
 public delegate void FarRegionGeneratedDelegate(long regionIdx, FarRegionHeightmap generatedHeightmap);
 
-public class FarRegionGen
+public class FarRegionGen : IDisposable
 {
   class InProgressRegion
   {
@@ -38,20 +39,39 @@ public class FarRegionGen
   private readonly int chunksInRegionColumn;
   private readonly int chunksInRegionArea;
 
+  private readonly TerrainSamplerAdapter terrainSamplerAdapter;
+
   public FarRegionGen(FarseerModSystem modSystem, ICoreServerAPI sapi)
   {
     this.modSystem = modSystem;
     this.sapi = sapi;
-    sapi.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
-    sapi.Event.RegisterGameTickListener((_) => LoadNextFarChunksInQueue(), 8004);
 
     chunksInRegionColumn = sapi.WorldManager.RegionSize / sapi.WorldManager.ChunkSize;
     chunksInRegionArea = chunksInRegionColumn * chunksInRegionColumn;
+
+    terrainSamplerAdapter = TerrainSamplerAdapter.TryCreate(modSystem, sapi);
+
+    if (terrainSamplerAdapter != null)
+    {
+      terrainSamplerAdapter.RegionGenerated += (idx, heightMap) => FarRegionGenerated?.Invoke(idx, heightMap);
+    }
+    else
+    {
+      sapi.Event.ChunkColumnLoaded += this.OnChunkColumnLoaded;
+      _ = sapi.Event.RegisterGameTickListener((_) => this.LoadNextFarChunksInQueue(), 8004);
+    }
   }
 
   public void StartGeneratingRegion(long regionIdx)
   {
-    if (regionGenerationQueue.Any(r => r.RegionIdx == regionIdx)) return;
+    if (terrainSamplerAdapter != null)
+    {
+      terrainSamplerAdapter.StartGeneratingRegion(regionIdx);
+      return;
+    }
+
+    if (regionGenerationQueue.Any(r => r.RegionIdx == regionIdx))
+      return;
 
     var regionPos = sapi.WorldManager.MapRegionPosFromIndex2D(regionIdx);
     var chunkStartX = regionPos.X * chunksInRegionColumn;
@@ -270,6 +290,13 @@ public class FarRegionGen
         modSystem.Mod.Logger.Notification("All done!");
       }
     }
+  }
+
+  public void Dispose()
+  {
+    terrainSamplerAdapter?.Dispose();
+    if (terrainSamplerAdapter == null)
+      sapi.Event.ChunkColumnLoaded -= this.OnChunkColumnLoaded;
   }
 
   public void GenerateDummyData(long regionIdx)
